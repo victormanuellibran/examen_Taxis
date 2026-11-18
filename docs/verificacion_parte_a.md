@@ -13,10 +13,10 @@ Comando:
 Resultado observado:
 
 ```text
-14 passed in 0.53s
+17 passed in 1.61s
 ```
 
-La suite cubre calidad sintética, idempotencia, fallas de red y temporales parciales, reconciliación, drift de esquema y contratos del orquestador.
+La suite cubre calidad sintética, idempotencia, fallas de red y temporales parciales, reconciliación, drift de esquema, contratos del orquestador y pruebas de integración del modelo y las consultas.
 
 ## Ejecución real hasta calidad
 
