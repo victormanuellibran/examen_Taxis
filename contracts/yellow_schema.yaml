@@ -1,0 +1,24 @@
+version: 1
+new_columns_policy: fail_and_report
+missing_columns_policy: fail_except_cbd_before_2025
+columns:
+  VendorID: {name: vendor_id, type: BIGINT}
+  tpep_pickup_datetime: {name: tpep_pickup_datetime, type: TIMESTAMP}
+  tpep_dropoff_datetime: {name: tpep_dropoff_datetime, type: TIMESTAMP}
+  passenger_count: {name: passenger_count, type: BIGINT}
+  trip_distance: {name: trip_distance, type: DOUBLE}
+  RatecodeID: {name: ratecode_id, type: BIGINT}
+  store_and_fwd_flag: {name: store_and_fwd_flag, type: VARCHAR}
+  PULocationID: {name: pu_location_id, type: BIGINT}
+  DOLocationID: {name: do_location_id, type: BIGINT}
+  payment_type: {name: payment_type, type: BIGINT}
+  fare_amount: {name: fare_amount, type: DOUBLE}
+  extra: {name: extra, type: DOUBLE}
+  mta_tax: {name: mta_tax, type: DOUBLE}
+  tip_amount: {name: tip_amount, type: DOUBLE}
+  tolls_amount: {name: tolls_amount, type: DOUBLE}
+  improvement_surcharge: {name: improvement_surcharge, type: DOUBLE}
+  total_amount: {name: total_amount, type: DOUBLE}
+  congestion_surcharge: {name: congestion_surcharge, type: DOUBLE}
+  Airport_fee: {name: airport_fee, type: DOUBLE}
+  cbd_congestion_fee: {name: cbd_congestion_fee, type: DOUBLE}
