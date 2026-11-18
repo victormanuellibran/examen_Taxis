@@ -66,15 +66,15 @@ def run_model(months: list[str]) -> None:
     output = ["# Resultados del modelo NYC Taxi", "", f"Mes comparado: `{comparison_month}`; mes asignado: `{target_month}`.", ""]
     interpretations = {
         "q1_top_zones.sql": "El ranking muestra las 10 zonas de origen con mayor volumen en 2025-06 y su variación porcentual frente a 2024-06 (lideradas por JFK Airport y Upper East Side South).",
-        "q2_peak_revenue_hour.sql": "Las 05:00 h registran el mayor ingreso total promedio por viaje ($32,57), impulsado por traslados matutinos de larga distancia hacia aeropuertos.",
+        "q2_peak_revenue_hour.sql": "Las 05:00 h registran el mayor ingreso promedio por viaje ($32,57). La consulta sólo agrupa por hora; no permite atribuir ese resultado a aeropuertos ni a una causa específica.",
         "q3_cbd_fee.sql": "El 73,73 % de los viajes aceptados en 2025-06 registra cbd_congestion_fee > 0; Rikers Island aparece con 100 % por tener un único viaje (1/1), seguido por zonas del CBD en Manhattan (~99,8 % con más de 33.000 viajes cada una).",
-        "q4_tip_by_payment.sql": "El tipo de pago 1 (tarjeta de crédito) promedia 25,26 % de propina sobre tarifa; el tipo 2 (efectivo, ~0,002 %) y el tipo 0 (Flex Fare / sin categoría fija, 1,49 %) no son interpretables como propina real porque las propinas en efectivo no se registran en el taxímetro y el código 0 agrupa viajes de tarifa preacordada o medio no especificado.",
+        "q4_tip_by_payment.sql": "El tipo 1 (tarjeta de crédito) promedia 25,26 % de propina sobre tarifa. TLC define el tipo 0 como Flex Fare y el tipo 2 como efectivo; las propinas en efectivo no se incluyen en tip_amount, por lo que el promedio del tipo 2 no mide la propina real. El tipo 0 tampoco debe interpretarse como un medio de pago tradicional.",
         "q5_airports.sql": "Se identifican JFK Airport y LaGuardia Airport por nombre de zona (origen o destino): en 2025-06 suman 346.769 viajes con tarifa media de $57,76 frente a 334.938 viajes y $56,26 en 2024-06.",
         "q6_month_variation.sql": (
-            "Hipótesis de causa (variación +17,75 % en viajes y -$0,16 en tarifa media):\n"
-            "1. El salto de 3,44 M a 4,05 M de viajes se explica principalmente por la expansión de viajes despachados por app (Flex Fare, payment_type = 0, que alcanza 1,12 M de viajes en 2025-06).\n"
-            "2. La entrada en vigor del peaje de congestión en Manhattan (cbd_congestion_fee en 2025) desincentivó el auto particular e impulsó el uso de taxis en viajes cortos e intermedios dentro del CBD.\n"
-            "3. Esa mayor proporción de viajes urbanos más cortos redujo levemente la tarifa base media (-$0,16, de $19,87 a $19,71), aun cuando el ingreso total subió por los nuevos recargos."
+            "Observación: los viajes aceptados subieron 17,75 % y la tarifa media bajó $0,16.\n"
+            "Hipótesis: una mayor participación de viajes Flex Fare (payment_type = 0) y de trayectos urbanos puede contribuir a ese patrón.\n"
+            "El cargo cbd_congestion_fee aparece en 2025, pero estos datos descriptivos no demuestran que haya causado el aumento de viajes.\n"
+            "La relación causal requeriría comparar otros períodos y controlar estacionalidad, oferta y demanda."
         ),
     }
     for name, query, description, rows in results:

@@ -46,8 +46,8 @@ El contrato versionado está en `contracts/yellow_schema.yaml`. `cbd_congestion_
 La exploración real encontró propinas negativas (`R08`, 108 en 2024-06 y 367 en 2025-06): se marcan como advertencia en `warning_flags`. Los viajes con pasajeros nulos o cero (`R05`) también se advierten. La reconciliación exige `rows_read == rows_accepted + rows_quarantined`. La ingesta registra SHA-256, bytes, filas, URL, timestamps UTC y estado en `data/control/ingestion_log.csv`.
 
 En la ejecución local del pipeline completo para junio de 2024 y junio de 2025 (`7.862.153` filas leídas), reutilizando los archivos raw descargados:
-- **Tiempo total de ejecución:** ~`50,1`–`50,9` segundos por corrida completa de las 5 etapas.
-- **Pico de RAM (Working Set / RSS medido):** ~`2,01 GB` (`2008 MB`), cumpliendo con amplio margen la restricción de 8 GB de RAM gracias al límite configurado en DuckDB (`memory_limit='2GB'`, `threads='2'`, `preserve_insertion_order='false'`) y al procesamiento streaming sin cargar tablas completas en memoria de Python/pandas.
+- **Medición de QA de referencia:** ~`50,1`–`50,9` segundos por corrida completa de las 5 etapas y ~`2,01 GB` de Working Set/RSS (`2008 MB`), medidos en el worktree de QA antes de integrar sus correcciones.
+- **Ejecución posterior a la optimización:** la corrida actual terminó en aproximadamente `33,2` segundos según sus timestamps. No se presenta un nuevo pico de RAM para esta corrida porque no se obtuvo una medición equivalente; DuckDB conserva `memory_limit='2GB'`, `threads='2'` y `preserve_insertion_order='false'`, con temporales en `data/tmp`.
 
 ## Resultados, tests y declaración de uso de IA
 

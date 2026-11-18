@@ -55,7 +55,7 @@ LIMIT 1;
 | --- | --- | --- | --- |
 | 5 | 33314 | 1085064.6000 | 32.5708 |
 
-Las 05:00 h registran el mayor ingreso total promedio por viaje ($32,57), impulsado por traslados matutinos de larga distancia hacia aeropuertos.
+Las 05:00 h registran el mayor ingreso promedio por viaje ($32,57). La consulta sólo agrupa por hora; no permite atribuir ese resultado a aeropuertos ni a una causa específica.
 
 ## q3_cbd_fee.sql
 
@@ -109,7 +109,7 @@ GROUP BY payment_type ORDER BY payment_type;
 | 4 | 48899 | 0.0334 |
 | 5 | 1 | 0.0000 |
 
-El tipo de pago 1 (tarjeta de crédito) promedia 25,26 % de propina sobre tarifa; el tipo 2 (efectivo, ~0,002 %) y el tipo 0 (Flex Fare / sin categoría fija, 1,49 %) no son interpretables como propina real porque las propinas en efectivo no se registran en el taxímetro y el código 0 agrupa viajes de tarifa preacordada o medio no especificado.
+El tipo 1 (tarjeta de crédito) promedia 25,26 % de propina sobre tarifa. TLC define el tipo 0 como Flex Fare y el tipo 2 como efectivo; las propinas en efectivo no se incluyen en tip_amount, por lo que el promedio del tipo 2 no mide la propina real. El tipo 0 tampoco debe interpretarse como un medio de pago tradicional.
 
 ## q5_airports.sql
 
@@ -155,7 +155,7 @@ FROM p JOIN summary c ON c.month = p.comparison_month JOIN summary t ON t.month 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2024-06 | 2025-06 | 3441465 | 4052233 | 610768 | 17.7500 | 19.8668 | 19.7080 | -0.1588 |
 
-Hipótesis de causa (variación +17,75 % en viajes y -$0,16 en tarifa media):
-1. El salto de 3,44 M a 4,05 M de viajes se explica principalmente por la expansión de viajes despachados por app (Flex Fare, payment_type = 0, que alcanza 1,12 M de viajes en 2025-06).
-2. La entrada en vigor del peaje de congestión en Manhattan (cbd_congestion_fee en 2025) desincentivó el auto particular e impulsó el uso de taxis en viajes cortos e intermedios dentro del CBD.
-3. Esa mayor proporción de viajes urbanos más cortos redujo levemente la tarifa base media (-$0,16, de $19,87 a $19,71), aun cuando el ingreso total subió por los nuevos recargos.
+Observación: los viajes aceptados subieron 17,75 % y la tarifa media bajó $0,16.
+Hipótesis: una mayor participación de viajes Flex Fare (payment_type = 0) y de trayectos urbanos puede contribuir a ese patrón.
+El cargo cbd_congestion_fee aparece en 2025, pero estos datos descriptivos no demuestran que haya causado el aumento de viajes.
+La relación causal requeriría comparar otros períodos y controlar estacionalidad, oferta y demanda.

@@ -8,7 +8,7 @@
 
 ## 1. Resumen Ejecutivo
 
-Se auditó el proyecto completo frente a la consigna original (`Examen Pipeline NYC Taxi.docx`) y al contrato de integración ([AGENTS.md](file:///C:/Users/Usuario/Documents/FACULTAD/4TO%20A%C3%91O/FUNDAMENTOS%20DE%20DATOS/EXAMEN/AGENTS.md)), abarcando las 5 etapas del pipeline batch para `2024-06` y `2025-06`.
+Se auditó el proyecto completo frente a la consigna original (`Examen Pipeline NYC Taxi.docx`) y al contrato de integración ([AGENTS.md](../AGENTS.md)), abarcando las 5 etapas del pipeline batch para `2024-06` y `2025-06`.
 
 - **Interfaces y Módulos (`src/`):** 100 % compatibles (`run_ingest`, `run_schema`, `run_quality`, `run_transform`, `run_model`, `pipeline.main`).
 - **Reconciliación exacta (Datos Reales):**

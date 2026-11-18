@@ -66,4 +66,4 @@ R08 se justifica por la exploración real de propinas negativas. Las advertencia
 
 ## Límites de esta evidencia
 
-La ejecución completa también fue realizada y generó la capa curada, el warehouse y `RESULTADOS.md`. El tiempo observado con los archivos raw ya presentes fue de aproximadamente 70 segundos. El pico de RAM del proceso todavía no se midió con una herramienta estable; DuckDB mantiene configurado un límite de 2 GB y usa `data/tmp` para temporales.
+La ejecución completa también fue realizada y generó la capa curada, el warehouse y `RESULTADOS.md`. La corrida observada antes de la optimización de QA tardó aproximadamente 70 segundos y no tuvo una medición estable de RSS. `docs/revision_integracion.md` conserva mediciones de otra revisión del worktree QA (50,08 s y 50,92 s; ~2.008 MB). La ejecución actual posterior a esas optimizaciones terminó en aproximadamente 33,2 segundos según sus timestamps, pero no se debe presentar como una nueva medición de RAM. DuckDB mantiene configurado un límite de 2 GB y usa `data/tmp` para temporales.
