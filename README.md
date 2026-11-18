@@ -29,7 +29,7 @@ El contrato versionado está en `contracts/yellow_schema.yaml`. `cbd_congestion_
 
 La exploración real encontró propinas negativas: se marcan como advertencia. Los viajes con pasajeros nulos o cero también se advierten. La reconciliación exige filas leídas = aceptadas + cuarentena. La ingesta registra SHA-256, bytes, filas, URL, timestamps UTC y estado en `data/control/ingestion_log.csv`.
 
-En la ejecución local de junio de 2024 y junio de 2025, la parte A tardó aproximadamente 15 segundos después de la descarga inicial y procesó más de 7,8 millones de filas sin cargar el dataset completo en pandas. No se midió el RSS máximo del proceso; DuckDB tiene un límite configurado de 2 GB.
+En la ejecución local del pipeline completo para junio de 2024 y junio de 2025, reutilizando los archivos raw ya descargados, el tiempo medido fue de aproximadamente 70,2 segundos (18/11/2026), y se procesaron más de 7,8 millones de filas sin cargar el dataset completo en pandas. No se midió todavía el RSS máximo del proceso; DuckDB tiene un límite configurado de 2 GB.
 
 ## Resultados y tests
 
