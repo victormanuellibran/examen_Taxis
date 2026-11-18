@@ -5,6 +5,6 @@ FROM fact_trips f, p
 WHERE strftime(f.pickup_date, '%Y-%m') IN (p.target_month, p.comparison_month)
   AND (lower(coalesce(f.pickup_zone, '')) LIKE '%jfk%'
        OR lower(coalesce(f.dropoff_zone, '')) LIKE '%jfk%'
-       OR lower(coalesce(f.pickup_zone, '')) LIKE '%la guardia%'
-       OR lower(coalesce(f.dropoff_zone, '')) LIKE '%la guardia%')
+       OR lower(coalesce(f.pickup_zone, '')) LIKE '%laguardia%'
+       OR lower(coalesce(f.dropoff_zone, '')) LIKE '%laguardia%')
 GROUP BY month ORDER BY month;
