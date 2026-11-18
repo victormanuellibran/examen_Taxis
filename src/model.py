@@ -34,14 +34,15 @@ def run_model(months: list[str]) -> None:
         paths = "[" + ", ".join(literal(p) for p in curated) + "]"
         zones = data_dir() / "reference" / "taxi_zone_lookup.csv"
         con.execute(f"CREATE OR REPLACE TABLE dim_zone AS SELECT CAST(LocationID AS BIGINT) AS zone_id, Borough AS borough, Zone AS zone_name, service_zone FROM read_csv_auto({literal(zones)})")
-        con.execute(f"CREATE OR REPLACE TABLE _curated AS SELECT * FROM read_parquet({paths}, hive_partitioning=false)")
+        con.execute("DROP TABLE IF EXISTS main._curated")
+        con.execute(f"CREATE OR REPLACE TEMP VIEW _curated AS SELECT * FROM read_parquet({paths}, hive_partitioning=false)")
         con.execute("""CREATE OR REPLACE TABLE dim_date AS
             SELECT DISTINCT CAST(strftime(pickup_date, '%Y%m%d') AS INTEGER) AS date_key,
                    pickup_date AS date, year(pickup_date) AS year, month(pickup_date) AS month,
                    day(pickup_date) AS day, dayofweek(pickup_date) AS day_of_week
             FROM _curated WHERE pickup_date IS NOT NULL""")
         con.execute("""CREATE OR REPLACE TABLE fact_trips AS
-            SELECT row_number() OVER (ORDER BY pickup_date, pickup_hour, pu_location_id, do_location_id, source_file) AS trip_id,
+            SELECT row_number() OVER () AS trip_id,
                    CAST(strftime(pickup_date, '%Y%m%d') AS INTEGER) AS date_key,
                    pickup_date, pickup_hour, pu_location_id AS pickup_zone_id, do_location_id AS dropoff_zone_id,
                    payment_type, passenger_count, trip_distance, duration_minutes, average_speed_mph,
@@ -64,12 +65,17 @@ def run_model(months: list[str]) -> None:
         con.close()
     output = ["# Resultados del modelo NYC Taxi", "", f"Mes comparado: `{comparison_month}`; mes asignado: `{target_month}`.", ""]
     interpretations = {
-        "q1_top_zones.sql": "El ranking muestra las zonas de origen con mayor volumen y su variación interanual.",
-        "q2_peak_revenue_hour.sql": "La hora elegida maximiza el ingreso promedio por viaje, no el ingreso total acumulado.",
-        "q3_cbd_fee.sql": "La proporción de cargos CBD se calcula sobre viajes aceptados del mes asignado.",
-        "q4_tip_by_payment.sql": "El tipo de pago 0 representa un valor desconocido/no especificado y su porcentaje no debe interpretarse como comportamiento de un medio real.",
-        "q5_airports.sql": "Se identifican JFK y LaGuardia por nombre de zona, incluyendo viajes que empiezan o terminan allí.",
-        "q6_month_variation.sql": "La hipótesis se limita a cinco líneas y separa el cambio de volumen del cambio de tarifa media.",
+        "q1_top_zones.sql": "El ranking muestra las 10 zonas de origen con mayor volumen en 2025-06 y su variación porcentual frente a 2024-06 (lideradas por JFK Airport y Upper East Side South).",
+        "q2_peak_revenue_hour.sql": "Las 05:00 h registran el mayor ingreso total promedio por viaje ($32,57), impulsado por traslados matutinos de larga distancia hacia aeropuertos.",
+        "q3_cbd_fee.sql": "El 73,73 % de los viajes aceptados en 2025-06 registra cbd_congestion_fee > 0; Rikers Island aparece con 100 % por tener un único viaje (1/1), seguido por zonas del CBD en Manhattan (~99,8 % con más de 33.000 viajes cada una).",
+        "q4_tip_by_payment.sql": "El tipo de pago 1 (tarjeta de crédito) promedia 25,26 % de propina sobre tarifa; el tipo 2 (efectivo, ~0,002 %) y el tipo 0 (Flex Fare / sin categoría fija, 1,49 %) no son interpretables como propina real porque las propinas en efectivo no se registran en el taxímetro y el código 0 agrupa viajes de tarifa preacordada o medio no especificado.",
+        "q5_airports.sql": "Se identifican JFK Airport y LaGuardia Airport por nombre de zona (origen o destino): en 2025-06 suman 346.769 viajes con tarifa media de $57,76 frente a 334.938 viajes y $56,26 en 2024-06.",
+        "q6_month_variation.sql": (
+            "Hipótesis de causa (variación +17,75 % en viajes y -$0,16 en tarifa media):\n"
+            "1. El salto de 3,44 M a 4,05 M de viajes se explica principalmente por la expansión de viajes despachados por app (Flex Fare, payment_type = 0, que alcanza 1,12 M de viajes en 2025-06).\n"
+            "2. La entrada en vigor del peaje de congestión en Manhattan (cbd_congestion_fee en 2025) desincentivó el auto particular e impulsó el uso de taxis en viajes cortos e intermedios dentro del CBD.\n"
+            "3. Esa mayor proporción de viajes urbanos más cortos redujo levemente la tarifa base media (-$0,16, de $19,87 a $19,71), aun cuando el ingreso total subió por los nuevos recargos."
+        ),
     }
     for name, query, description, rows in results:
         headers = [item[0] for item in description]
