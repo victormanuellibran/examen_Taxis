@@ -12,7 +12,7 @@ CI no descarga Parquet de NYC TLC, no ejecuta `dbt build`, no construye los ware
 
 ## Interpretación del resultado
 
-- Un workflow aprobado indica que las dependencias, los 28 tests pytest y la compilación estática de dbt pasaron en un checkout limpio.
+- Un workflow aprobado indica que las dependencias, los 37 tests pytest y la compilación estática de dbt pasaron en un checkout limpio.
 - Un workflow fallido debe revisarse desde el job que aparece en la pestaña **Actions** del repositorio. El primer paso rojo contiene el error que debe corregirse.
 - Que CI esté aprobado no reemplaza la validación de conteos, reconciliación, relaciones y consultas sobre los Parquet oficiales.
 

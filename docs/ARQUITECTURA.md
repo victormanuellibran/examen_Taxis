@@ -104,7 +104,7 @@ flowchart LR
 | **Módulo de Etapa 5** | [`../src/model.py`](../src/model.py) | [`../src/dbt_runner.py`](../src/dbt_runner.py) + [`../dbt_project/`](../dbt_project/) |
 | **Base de datos DuckDB destino** | `data/warehouse/nyc_taxi.duckdb` (`527,51 MiB`) | `data/warehouse/nyc_taxi_dbt.duckdb` (`546,01 MiB`) |
 | **Gestión de dependencias entre tablas** | Orden secuencial de sentencias SQL en Python | Grafo declarativo DAG resuelto por `source()` y `ref()` |
-| **Pruebas de integridad del modelo** | `pytest` (28 tests) | `dbt test` (24 data tests en vivo) + `pytest` (28 tests) |
+| **Pruebas de integridad del modelo** | `pytest` (37 tests) | `dbt test` (24 data tests en vivo) + `pytest` (37 tests) |
 | **Tiempo total medido en `.venv` (Junio)** | `31,1 s` – `31,36 s` | `37,9 s` – `39,00 s` |
 | **Pico de RAM observado en `.venv` (Junio)** | `~2.023 MB` | `~2.001 MB` |
 | **Resultados de `sql/q1..q6.sql`** | Exactos | Equivalentes dentro de `1e-5` |
@@ -126,7 +126,7 @@ flowchart LR
         subgraph CONT["Contenedor Batch: pipeline (examen-nyc-taxi:latest)\nmem_limit: 4g · cpus: 2.0 · restart: no"]
             PY_CLI["python -m src.pipeline\n--mes YYYY-MM --modelo python|dbt"]
             DBT_CLI["dbt debug / dbt build / dbt test\n(DBT_TARGET_PATH=/tmp/dbt_target)"]
-            PYTEST_CLI["python -m pytest -v\n(28 passed)"]
+            PYTEST_CLI["python -m pytest -v\n(37 passed)"]
         end
     end
 
