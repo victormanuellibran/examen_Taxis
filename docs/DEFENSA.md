@@ -14,11 +14,11 @@ La consigna original establece tres pasos obligatorios para la demostración pr�
 2. Volver a correrlo y mostrar que los conteos no cambian (idempotencia).
 3. Mostrar el reporte de calidad y una fila en cuarentena con su regla violada.
 
-### Paso 0: Ejecutar los 17 tests automatizados (5 segundos)
+### Paso 0: Ejecutar los 18 tests automatizados (5 segundos)
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v
 ```
-*Qué señalar al profesor:* pasan los 17 tests (14 unitarios y 3 de integración extremo a extremo) sin necesidad de Internet, validando reglas de calidad, drift de esquema, fallas de red, reconciliación, aislamiento de particiones y el filtro SQL de aeropuertos.
+*Qué señalar al profesor:* pasan los 18 tests (incluido el selector explícito del motor dbt) sin necesidad de Internet, validando reglas de calidad, drift de esquema, fallas de red, reconciliación, aislamiento de particiones y el filtro SQL de aeropuertos.
 
 ### Paso 1: Primera ejecución completa del pipeline (~35–50 segundos)
 ```powershell
@@ -28,6 +28,23 @@ La consigna original establece tres pasos obligatorios para la demostración pr�
 - Procesa `2024-06` y `2025-06` en orden cronológico.
 - Si los archivos `raw` ya están en disco, verifica el hash SHA-256 contra `data/control/ingestion_log.csv` y registra `reused` sin volver a descargar 133 MB.
 - Informa la reconciliación de ambos meses y genera `data/warehouse/nyc_taxi.duckdb` y `RESULTADOS.md`.
+
+### Paso 1 bis: Ejecutar el mismo pipeline con dbt
+```powershell
+.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --modelo dbt
+```
+*Qué señalar al profesor:*
+- Las etapas de ingesta, esquema, calidad y transformación son las mismas.
+- `src.pipeline` selecciona `src.dbt_runner` y no ejecuta `src.model.run_model()`.
+- `dbt build` construye staging, intermediate y marts en `data/warehouse/nyc_taxi_dbt.duckdb`.
+- El modo dbt ejecuta las mismas seis consultas y actualiza `RESULTADOS.md`.
+
+Para mostrar el proyecto dbt de forma independiente:
+```powershell
+.\.venv\Scripts\dbt.exe debug --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe build --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe test --project-dir dbt_project --profiles-dir dbt_project
+```
 
 ### Paso 2: Segunda ejecución consecutiva y verificación de conteos inalterados
 ```powershell
@@ -46,6 +63,8 @@ con.close()
 '@ | .\.venv\Scripts\python.exe -
 ```
 *Qué señalar al profesor:* tras correrlo por segunda vez, `fact_trips` sigue teniendo exactamente **7.493.698** filas (`3.441.465` de junio 2024 + `4.052.233` de junio 2025), todos los `trip_id` son únicos y la suma de `agg_zone_hour.trips` coincide exactamente con `fact_trips`.
+
+Para la idempotencia del modo dbt se repite el comando con `--modelo dbt` y se comprueban los mismos conteos en `data/warehouse/nyc_taxi_dbt.duckdb`.
 
 ### Paso 3: Mostrar el reporte de calidad y una fila real en cuarentena con sus reglas violadas
 ```powershell
@@ -99,7 +118,11 @@ for r in rows:
 2. **Etapa 5 — Modelo estrella y optimización en DuckDB ([`src/model.py`](../src/model.py)) (2 min):**
    - "Construimos el warehouse `data/warehouse/nyc_taxi.duckdb` con cuatro tablas principales: `dim_zone` (granularidad: 1 fila por zona TLC, 265 filas), `dim_date` (1 fila por fecha calendario de subida, 60 filas), `fact_trips` (1 fila por viaje aceptado, 7.493.698 filas) y `agg_zone_hour` (1 fila por zona de origen, fecha y hora, 210.698 filas)."
    - "Un hallazgo importante de ingeniería ocurrió al integrar los 7,49 millones de viajes reales: hacer un `ORDER BY` global en `row_number() OVER (...)` junto con la columna `warning_flags` (que es una lista `LIST<VARCHAR>`) desbordaba el límite de 2 GB de DuckDB. Lo resolvimos definiendo `_curated` como `TEMP VIEW` sobre los Parquet curados y generando `trip_id` en streaming con `row_number() OVER ()`. Eso bajó el tamaño del warehouse de ~950 MB a 531 MB y redujo el tiempo total del pipeline a ~33–50 segundos manteniendo un pico de RAM de ~2,01 GB."
-3. **Auditoría de integración y las 6 respuestas de negocio ([`sql/`](../sql/) y [`RESULTADOS.md`](../RESULTADOS.md)) (2,5 min):**
+3. **Alternativa integrada con dbt ([`src/dbt_runner.py`](../src/dbt_runner.py)) (1 min):**
+   - "dbt no reemplaza la ingesta ni la calidad: recibe los Parquet curados y organiza el modelado dimensional declarativamente en SQL/Jinja. `source()` representa archivos externos reales; `ref()` expresa dependencias entre modelos."
+   - "`staging` son vistas de entrada, `intermediate` expone la capa curada y `marts` materializa `fact_trips`, `dim_zone`, `dim_date`, `agg_zone_hour` y `analysis_parameters` como tablas en `nyc_taxi_dbt.duckdb`."
+   - "`dbt build` compila, ejecuta modelos y tests; `dbt test` ejecuta las 24 pruebas declarativas (`not_null`, `unique`, `relationships` y SQL singulares). Usamos un hilo porque dbt-duckdb comparte el entorno local y el límite de memoria es 2 GB."
+4. **Auditoría de integración y las 6 respuestas de negocio ([`sql/`](../sql/) y [`RESULTADOS.md`](../RESULTADOS.md)) (2,5 min):**
    - "**Q1 (Top 10 zonas):** lideran `JFK Airport` (170.662 viajes, +12,15 %), `Upper East Side South` (169.820, +8,51 %) y `Midtown Center` (168.115, +5,51 %)."
    - "**Q2 (Hora de mayor ingreso promedio):** las `05:00` h con `$32,57` por viaje (33.314 viajes)."
    - "**Q3 (Cargo CBD):** en junio de 2025 el **73,73 %** de los viajes aceptados (2.987.770 viajes) pagó `cbd_congestion_fee > 0`. En el top 5 por proporción aparece primero `Rikers Island` con 100 % porque tuvo 1 solo viaje (1/1), seguido por zonas del CBD de Manhattan (`Greenwich Village South`, `West Village`, `SoHo`, `Greenwich Village North`) con ~99,8 % sobre decenas de miles de viajes."
@@ -133,4 +156,25 @@ for r in rows:
 **Respuesta:**
 1. Configuramos `duckdb.connect(config={"memory_limit": "2GB", "threads": "2", "temp_directory": str(tmp), "preserve_insertion_order": "false"})`.
 2. Nunca convertimos tablas a `pandas` ni a listas de Python.
-3. En [`src/model.py`](../src/model.py) usamos una vista temporal (`TEMP VIEW _curated`) sobre los Parquet curados y generamos `trip_id` en streaming con `row_number() OVER ()`, evitando ordenar globalmente 7,49 millones de filas con listas anidadas (`warning_flags`). En nuestras pruebas medidas, el pico de Working Set (RSS) del proceso fue de ~`2.008 MB` (~`2,01 GB`).
+3. En [`src/model.py`](../src/model.py) y en los marts dbt usamos vistas sobre los Parquet curados y generamos `trip_id` en streaming con `row_number() OVER ()`, evitando ordenar globalmente 7,49 millones de filas con listas anidadas (`warning_flags`). En las mediciones de integración, el árbol de procesos alcanzó `2.023 MB` en modo Python y `2.001 MB` en modo dbt; no es el consumo total de Windows.
+
+### P8. ¿Qué es dbt y qué diferencia tiene con DuckDB?
+**Respuesta:** DuckDB es el motor SQL que lee Parquet y ejecuta las consultas. dbt es la herramienta de modelado y pruebas: compila SQL/Jinja, ordena dependencias y materializa modelos en DuckDB. dbt no reemplaza al motor; organiza cómo se usa.
+
+### P9. ¿Qué significan staging, intermediate y marts?
+**Respuesta:** `staging` tipa y normaliza fuentes; `intermediate` prepara relaciones reutilizables; `marts` publica tablas analíticas consumibles (`fact_trips`, dimensiones y agregados). En este proyecto staging e intermediate son vistas sobre `curated` y marts son tablas.
+
+### P10. ¿Qué hacen `source()` y `ref()`?
+**Respuesta:** `source()` declara una dependencia sobre archivos externos reales (`accepted`, `curated` y zonas). `ref()` conecta un modelo con otro y permite que dbt construya el DAG, compile el nombre correcto y ejecute en orden.
+
+### P11. ¿Qué diferencia hay entre una vista y una tabla en dbt?
+**Respuesta:** Una `view` guarda la consulta y lee los Parquet al consultarla, sin duplicar físicamente todas las filas. Una `table` materializa el resultado para acelerar el consumo analítico. Usamos vistas en staging/intermediate y tablas en marts.
+
+### P12. ¿Qué hace `dbt build` y qué hace `dbt test`?
+**Respuesta:** `dbt build` compila y materializa los modelos y, según el DAG, ejecuta los tests asociados. `dbt test` ejecuta solamente los 24 tests declarativos ya construidos. En la evidencia local ambos terminaron sin errores: `32/32` recursos en build y `24/24` tests.
+
+### P13. ¿Cómo se demuestra que Python y dbt dan el mismo resultado?
+**Respuesta:** Se construyen los dos warehouses por separado, se verifican filas, unicidad de `trip_id`, relaciones y `SUM(agg_zone_hour.trips)`, y luego se ejecutan los seis mismos archivos SQL. q1 a q6 devolvieron `MATCH`; las únicas diferencias fueron redondeos flotantes menores a `1e-5`.
+
+### P14. ¿Por qué no implementaron Docker o Dagster todavía?
+**Respuesta:** Son tecnologías pendientes de una etapa posterior. La integración actual se concentra en cerrar el contrato Python + dbt, medir memoria y demostrar equivalencia sin introducir otra capa operativa que no fue solicitada ni verificada.

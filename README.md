@@ -41,11 +41,11 @@ Los registros públicos de viajes de taxis amarillos de Nueva York presentan tre
 3. **Datos crudos con anomalías operativas:** existen viajes con fechas fuera del mes del archivo, tiempos de bajada anteriores o iguales a la subida, distancias nulas, cero o extremas (> 200.000 millas), importes totales negativos, cantidades de pasajeros nulas o cero y propinas negativas.
 
 ### Objetivo
-Construir un **pipeline batch local, idempotente, trazable y reproducible** que ejecute de punta a punta con un único comando (`python -m src.pipeline --mes 2025-06` o `make all MES=2025-06`) las cinco etapas del ciclo de datos: ingesta con control de hashes, normalización bajo contrato versionado, validación de calidad con cuarentena y reconciliación estricta, almacenamiento Parquet particionado estilo Hive y modelado dimensional en estrella para responder seis consultas analíticas en SQL.
+Construir un **pipeline batch local, idempotente, trazable y reproducible** que ejecute de punta a punta con un único comando (`python -m src.pipeline --mes 2025-06` o `make all MES=2025-06`) las cinco etapas del ciclo de datos: ingesta con control de hashes, normalización bajo contrato versionado, validación de calidad con cuarentena y reconciliación estricta, almacenamiento Parquet particionado estilo Hive y modelado dimensional en estrella para responder seis consultas analíticas en SQL. El orquestador ofrece dos motores excluyentes de modelado: Python (predeterminado) y dbt (`--modelo dbt`).
 
 ### Alcance
 - Procesamiento automático del mes asignado (`2025-06`) y su mes homólogo del año anterior (`2024-06`), más el catálogo oficial de zonas (`taxi_zone_lookup.csv`).
-- Cobertura completa de las 5 etapas exigidas en la consigna y validación automatizada con **17 pruebas en `pytest`** (unitarias y de integración extremo a extremo con datos sintéticos).
+- Cobertura completa de las 5 etapas exigidas en la consigna y validación automatizada con **18 pruebas en `pytest`**, más **24 pruebas declarativas de dbt** (unitarias y de integración extremo a extremo con datos sintéticos y datos reales).
 - Exclusión estricta de archivos de datos (`data/`) y entornos locales (`.venv/`) del control de versiones en Git.
 
 ---
@@ -79,9 +79,11 @@ Cada capa tiene una responsabilidad única y escribe sus salidas de manera atóm
 2. **Capa `staging` (`data/staging/`):** esquema validado y normalizado a `snake_case` según [`contracts/yellow_schema.yaml`](contracts/yellow_schema.yaml), unificando diferencias entre 2024 y 2025.
 3. **Capas `validated` y `quarantine` (`data/validated/` y `data/quarantine/`):** compuerta de calidad que clasifica cada fila una sola vez. Separa viajes aceptados (con `warning_flags`) de viajes rechazados (con `violated_rules` y `rejection_flags`) y verifica la reconciliación matemática de conteos.
 4. **Capa `curated` (`data/curated/`):** almacenamiento Parquet particionado por `year=YYYY/month=MM`, enriquecido con métricas derivadas y atributos geográficos de zonas.
-5. **Capa `warehouse` (`data/warehouse/nyc_taxi.duckdb`):** base de datos analítica con el modelo estrella (`fact_trips`, `dim_zone`, `dim_date`) y la tabla agregada (`agg_zone_hour`), sobre la cual se ejecutan las 6 consultas SQL de [`sql/`](sql/) que generan [`RESULTADOS.md`](RESULTADOS.md).
+5. **Capa `warehouse`:** el modo Python escribe `data/warehouse/nyc_taxi.duckdb`; el modo dbt escribe `data/warehouse/nyc_taxi_dbt.duckdb`. Ambos contienen el mismo modelo estrella (`fact_trips`, `dim_zone`, `dim_date`, `agg_zone_hour`, `analysis_parameters`) y responden las 6 consultas SQL de [`sql/`](sql/).
 
-Para un análisis comparativo entre la arquitectura implementada y la arquitectura objetivo de evolución (con dbt y contenedores Docker), véase [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
+El modo dbt es una alternativa funcional integrada al mismo orquestador: `src.pipeline` ejecuta siempre ingesta, esquema, calidad y transformación, y luego delega exclusivamente el modelado a [`src/dbt_runner.py`](src/dbt_runner.py). No se ejecutan `src.model.run_model()` y `dbt build` en una misma corrida.
+
+Para el detalle de ambos modos y sus warehouses independientes, véase [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 
 ---
 
@@ -112,8 +114,10 @@ flowchart TD
         CUR["Capa Curated Particionada (Hive)\ndata/curated/yellow/year=YYYY/month=MM/part-000.parquet"]
     end
 
-    subgraph E5["Etapa 5: Modelo Estrella y Consultas SQL (src/model.py + sql/)"]
-        DW["Warehouse DuckDB\ndata/warehouse/nyc_taxi.duckdb\ndim_zone · dim_date · fact_trips · agg_zone_hour"]
+    subgraph E5["Etapa 5: Modelo Estrella y Consultas SQL"]
+        MODELO["Selector de motor\n--modelo python | dbt"]
+        DW["Warehouse Python\ndata/warehouse/nyc_taxi.duckdb\ndim_zone · dim_date · fact_trips · agg_zone_hour"]
+        DBT["Warehouse dbt\ndata/warehouse/nyc_taxi_dbt.duckdb\nmodels/staging · intermediate · marts"]
         RES["Reporte de Negocio\nRESULTADOS.md\n(Consultas q1 a q6)"]
     end
 
@@ -130,9 +134,13 @@ flowchart TD
     VAL --> E4
     RAW -->|"Catálogo de zonas"| E4
     E4 --> CUR
-    CUR --> DW
+    CUR --> MODELO
+    MODELO -->|"src/model.py"| DW
+    MODELO -->|"src/dbt_runner.py\ndbt build + dbt test"| DBT
     RAW -->|"Catálogo de zonas"| DW
+    RAW -->|"Catálogo de zonas"| DBT
     DW -->|"sql/q1..q6.sql"| RES
+    DBT -->|"sql/q1..q6.sql"| RES
 ```
 
 ---
@@ -141,7 +149,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    CLI["CLI / Makefile\npython -m src.pipeline --mes 2025-06\nmake all MES=2025-06"]
+    CLI["CLI / Makefile\npython -m src.pipeline --mes 2025-06\npython -m src.pipeline --mes 2025-06 --modelo dbt\nmake all MES=2025-06"]
 
     subgraph PY["Aplicación Python 3.10+ (src/)"]
         PIPE["Orquestador\nsrc/pipeline.py"]
@@ -150,13 +158,15 @@ flowchart LR
         SCH["Módulo Esquema\nsrc/schema.py\n(PyYAML + DuckDB SQL)"]
         QUA["Módulo Calidad\nsrc/quality.py\n(8 reglas SQL + reconcile)"]
         TRN["Módulo Transformación\nsrc/transform.py\n(Cálculos derivados + JOIN zonas)"]
-        MOD["Módulo Modelo\nsrc/model.py\n(DDL Estrella + Ejecución SQL)"]
+        MOD["Módulo Modelo Python\nsrc/model.py\n(DDL Estrella + Ejecución SQL)"]
+        DBTR["Runner dbt\nsrc/dbt_runner.py\n(dbt build + consultas SQL)"]
     end
 
     subgraph STORAGE["Almacenamiento Local y Contratos"]
         CONT["Contrato YAML\ncontracts/yellow_schema.yaml"]
         PARQ["Archivos Apache Parquet\n(Compresión ZSTD, particiones Hive)"]
-        DUCK["Motor Analítico DuckDB 1.4.3\nnyc_taxi.duckdb + spill en data/tmp"]
+        DUCK["DuckDB 1.4.3\nnyc_taxi.duckdb o nyc_taxi_dbt.duckdb\nspill en data/tmp"]
+        DBTP["dbt-core 1.12.7 + dbt-duckdb 1.11.1\ndbt_project/models/{staging,intermediate,marts}"]
         SQL["Consultas de Negocio\nsql/q1..q6.sql"]
     end
 
@@ -171,17 +181,20 @@ flowchart LR
     PIPE --> QUA
     PIPE --> TRN
     PIPE --> MOD
+    PIPE --> DBTR
     ING --> CFG
     SCH --> CFG
     QUA --> CFG
     TRN --> CFG
     MOD --> CFG
+    DBTR --> DBTP
     SCH --> CONT
     ING --> PARQ
     SCH --> DUCK
     QUA --> DUCK
     TRN --> DUCK
     MOD --> DUCK
+    DBTR --> DUCK
     DUCK <--> PARQ
     MOD --> SQL
     UT --> PY
@@ -225,10 +238,11 @@ flowchart LR
   - `pickup_borough`, `pickup_zone`, `pickup_service_zone`, `dropoff_borough`, `dropoff_zone`, `dropoff_service_zone`.
 - **Particionado estilo Hive y aislamiento:** escribe en `data/curated/yellow/year=YYYY/month=MM/part-000.parquet` con compresión `ZSTD`. Reprocesar un mes reemplaza de forma atómica únicamente el archivo de esa partición y deja intactas las particiones de los demás meses.
 
-### Etapa 5: Modelo estrella, agregados y consultas de negocio (`src/model.py` y `sql/`)
-- **Función:** `run_model(months: list[str]) -> None`
-- **Construcción del Warehouse:** conecta a `data/warehouse/nyc_taxi.duckdb`, crea una vista temporal `_curated` sobre las particiones curadas de ambos meses y materializa con `CREATE OR REPLACE TABLE` las tablas `dim_zone`, `dim_date`, `fact_trips`, `agg_zone_hour` y `analysis_parameters`.
-- **Generación reproducible de resultados:** ejecuta en orden alfabético los seis archivos SQL de [`sql/`](sql/) (`q1_top_zones.sql` a `q6_month_variation.sql`) y escribe las consultas, las tablas formateadas en Markdown y sus interpretaciones técnicas en [`RESULTADOS.md`](RESULTADOS.md).
+### Etapa 5: Modelo estrella, agregados y consultas de negocio (`src/model.py`, `src/dbt_runner.py` y `sql/`)
+- **Selector explícito:** `python -m src.pipeline --mes 2025-06` usa `src.model.run_model()`; agregar `--modelo dbt` usa `src.dbt_runner.run_model()`. El orquestador no ejecuta ambos constructores en una misma corrida.
+- **Modo Python:** conecta a `data/warehouse/nyc_taxi.duckdb`, crea una vista temporal `_curated` sobre las particiones curadas y materializa las tablas `dim_zone`, `dim_date`, `fact_trips`, `agg_zone_hour` y `analysis_parameters`.
+- **Modo dbt:** `src/dbt_runner.py` pasa los dos períodos a `dbt build`, cuyos modelos `staging`, `intermediate` y `marts` consumen la capa curada mediante `source()` y se materializan en `data/warehouse/nyc_taxi_dbt.duckdb`. Las dependencias entre modelos se expresan con `ref()`, y `dbt build` ejecuta las pruebas declarativas antes de finalizar.
+- **Generación reproducible de resultados:** ambos modos ejecutan los seis archivos SQL de [`sql/`](sql/) (`q1_top_zones.sql` a `q6_month_variation.sql`) sobre su warehouse correspondiente y generan [`RESULTADOS.md`](RESULTADOS.md).
 
 ---
 
@@ -244,12 +258,14 @@ El proyecto utiliza exclusivamente tecnologías implementadas y verificadas en e
 | **PyYAML** | `6.0.3` | Lectura del contrato declarativo de esquema ([`contracts/yellow_schema.yaml`](contracts/yellow_schema.yaml)), desacoplando las reglas de nombres y tipos del código Python. |
 | **Requests** | `2.32.5` | Cliente HTTP con soporte de `stream=True` y *timeouts* explícitos (`(15, 120)` segundos) para descargas de archivos grandes en fragmentos de 1 MiB con reintentos exponenciales. |
 | **pytest** | `9.0.2` | Framework de pruebas automatizadas para verificar reglas de calidad, idempotencia, fallas de red, evolución de esquema, aislamiento de particiones y consultas SQL sobre datos sintéticos sin depender de conexión a Internet. |
+| **dbt-core** | `1.12.7` | Orquestación declarativa del grafo de modelos, compilación Jinja/SQL y ejecución de `dbt build`/`dbt test`. |
+| **dbt-duckdb** | `1.11.1` | Adaptador que materializa los modelos dbt sobre `data/warehouse/nyc_taxi_dbt.duckdb` y lee Parquet externos mediante `source()`. |
 
 ---
 
 ## 8. Modelo Estrella y Tabla Agregada en DuckDB
 
-El warehouse analítico (`data/warehouse/nyc_taxi.duckdb`) implementa un esquema en estrella compuesto por una tabla de hechos, dos dimensiones conformadas y una tabla agregada precalculada:
+Cada modo implementa el mismo esquema en estrella compuesto por una tabla de hechos, dos dimensiones conformadas, una tabla agregada y `analysis_parameters`. Python lo materializa en `data/warehouse/nyc_taxi.duckdb`; dbt en `data/warehouse/nyc_taxi_dbt.duckdb`:
 
 ```mermaid
 erDiagram
@@ -310,7 +326,7 @@ erDiagram
 
 ### Granularidad y conteos verificados
 
-| Tabla | Rol dimensional | Granularidad exacta | Filas en `nyc_taxi.duckdb` | Verificación de integridad |
+| Tabla | Rol dimensional | Granularidad exacta | Filas en ambos warehouses | Verificación de integridad |
 |---|---|---|---:|---|
 | `fact_trips` | Tabla de hechos | 1 fila por viaje aceptado en los dos meses procesados | **7.493.698** | `3.441.465` (`2024-06`) + `4.052.233` (`2025-06`); `trip_id` 100 % único |
 | `dim_zone` | Dimensión geográfica | 1 fila por zona del catálogo oficial TLC (`LocationID`) | **265** | Incluye las 263 zonas geográficas más códigos `264` (`Unknown`) y `265` (`Outside of NYC`) |
@@ -354,7 +370,7 @@ Al ejecutar el pipeline por segunda vez consecutiva o reprocesar un único mes, 
 
 ## 10. Las Seis Preguntas de Negocio
 
-Las preguntas exigidas por la cátedra se resuelven mediante seis consultas SQL independientes versionadas en [`sql/`](sql/), ejecutadas directamente sobre `data/warehouse/nyc_taxi.duckdb`:
+Las preguntas exigidas por la cátedra se resuelven mediante seis consultas SQL independientes versionadas en [`sql/`](sql/). Se ejecutan sobre `data/warehouse/nyc_taxi.duckdb` en modo Python o sobre `data/warehouse/nyc_taxi_dbt.duckdb` en modo dbt; la lógica SQL es la misma:
 
 1. **[`sql/q1_top_zones.sql`](sql/q1_top_zones.sql):** Las 10 zonas de origen (`pickup_zone`) con mayor cantidad de viajes en el mes asignado (`2025-06`) y su variación porcentual contra el mismo mes de 2024 (`2024-06`).
 2. **[`sql/q2_peak_revenue_hour.sql`](sql/q2_peak_revenue_hour.sql):** La hora del día (`pickup_hour`) con mayor ingreso promedio por viaje (`AVG(total_amount)`) en `2025-06`.
@@ -439,7 +455,7 @@ examen_Taxis/
 ├── Makefile                                       # Atajos de ejecución (make all, make calidad, make test)
 ├── README.md                                      # Presentación general y documentación principal del parcial
 ├── RESULTADOS.md                                  # Respuestas generadas para las 6 consultas SQL de negocio
-├── requirements.txt                               # Dependencias fijadas (duckdb, pyarrow, PyYAML, requests, pytest)
+├── requirements.txt                               # Dependencias fijadas (incluye dbt-core y dbt-duckdb)
 ├── .gitignore                                     # Exclusión de data/, .venv/, cachés y archivos temporales
 ├── contracts/
 │   └── yellow_schema.yaml                         # Contrato declarativo de esquema v1 (20 columnas y políticas)
@@ -457,6 +473,11 @@ examen_Taxis/
 │   ├── q4_tip_by_payment.sql                      # Consulta 4: Propina promedio (% de tarifa) por tipo de pago
 │   ├── q5_airports.sql                            # Consulta 5: Viajes y tarifa media en aeropuertos JFK y LaGuardia
 │   └── q6_month_variation.sql                     # Consulta 6: Variación total de viajes y tarifa media
+├── dbt_project/
+│   ├── dbt_project.yml                             # Proyecto y variables de períodos
+│   ├── profiles.yml                                # Perfil DuckDB con límite de memoria y spill
+│   ├── models/                                     # sources, staging, intermediate y marts
+│   └── tests/                                      # Tests singulares de reconciliación e integridad
 ├── src/
 │   ├── __init__.py
 │   ├── config.py                                  # Resolución de rutas, conexión DuckDB limitada a 2 GB y escritura atómica
@@ -465,13 +486,14 @@ examen_Taxis/
 │   ├── quality.py                                 # Etapa 3: Evaluación de 8 reglas, cuarentena y reconciliación doble
 │   ├── transform.py                               # Etapa 4: Columnas derivadas, cruce con zonas y Parquet particionado
 │   ├── model.py                                   # Etapa 5: Modelo estrella en DuckDB y generación de RESULTADOS.md
-│   └── pipeline.py                                # CLI principal (--mes YYYY-MM y --hasta-calidad)
+│   ├── dbt_runner.py                               # Etapa 5 alternativa: dbt build y consultas SQL
+│   └── pipeline.py                                # CLI principal (--mes, --modelo y --hasta-calidad)
 └── tests/
     ├── test_ingest.py                             # Pruebas de idempotencia de descarga, corrupción SHA-256 y reintentos
     ├── test_schema.py                             # Pruebas de mapeo snake_case, nulo tipado 2024 y rechazo de drift
     ├── test_quality.py                            # Pruebas de las 8 reglas y múltiples violaciones simultáneas
     ├── test_reconciliation.py                     # Pruebas de reconciliación exacta y detección de desbalances
-    ├── test_pipeline.py                           # Pruebas del contrato de orquestación y códigos de salida
+    ├── test_pipeline.py                           # Pruebas del contrato, selector de motor y códigos de salida
     └── integration/
         ├── test_integration_pipeline.py           # Prueba extremo a extremo (5 etapas), idempotencia y aislamiento Hive
         └── test_sql_business_rules.py             # Prueba de regresión SQL para aeropuertos JFK y LaGuardia
@@ -494,7 +516,8 @@ data/
 ├── quarantine/yellow/year=YYYY/month=MM/rejected.parquet
 ├── curated/yellow/year=YYYY/month=MM/part-000.parquet
 ├── tmp/                                           # Directorio de spill a disco de DuckDB
-└── warehouse/nyc_taxi.duckdb                      # Base de datos analítica con el modelo estrella
+├── warehouse/nyc_taxi.duckdb                      # Warehouse del modo Python
+└── warehouse/nyc_taxi_dbt.duckdb                  # Warehouse alternativo del modo dbt
 ```
 
 ---
@@ -524,10 +547,10 @@ Los tests utilizan datos sintéticos en directorios temporales aislados (`NYC_TA
 .\.venv\Scripts\python.exe -m pytest -v
 ```
 
-Resultado esperado: **`17 passed`**.
+Resultado esperado: **`18 passed`**.
 
 ### 3. Ejecutar el pipeline completo (Etapas 1 a 5)
-Procesa automáticamente `2024-06` y `2025-06`, construye el warehouse DuckDB y actualiza `RESULTADOS.md`:
+Procesa automáticamente `2024-06` y `2025-06`, construye el warehouse Python y actualiza `RESULTADOS.md`:
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06
@@ -535,14 +558,31 @@ Procesa automáticamente `2024-06` y `2025-06`, construye el warehouse DuckDB y 
 
 *(En entornos con GNU Make disponible también puede ejecutarse `make all MES=2025-06` o `make all MES=2025-06 PYTHON=.venv/Scripts/python.exe`).*
 
-### 4. Ejecutar únicamente hasta la etapa de calidad (Etapas 1 a 3)
+### 4. Ejecutar el pipeline completo con dbt
+El mismo orquestador ejecuta ingesta, esquema, calidad y transformación, y delega exclusivamente el modelado a dbt:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --modelo dbt
+```
+
+Este modo usa `data/warehouse/nyc_taxi_dbt.duckdb`, modelos `staging`, `intermediate` y `marts`, y genera las mismas seis consultas de negocio. Las fuentes externas apuntan a los Parquet curados; no se ejecuta además `src.model.run_model()`.
+
+Para verificar dbt de manera independiente:
+
+```powershell
+.\.venv\Scripts\dbt.exe debug --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe build --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe test --project-dir dbt_project --profiles-dir dbt_project
+```
+
+### 5. Ejecutar únicamente hasta la etapa de calidad (Etapas 1 a 3)
 Para verificar ingesta, esquema, cuarentena y reconciliación sin reconstruir el warehouse:
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --hasta-calidad
 ```
 
-### 5. Verificar idempotencia y conteos del warehouse
+### 6. Verificar idempotencia y conteos del warehouse
 Al volver a ejecutar `.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06`, la consola mostrará `reused` para los tres archivos de entrada (sin descargas de red) y los conteos del modelo estrella se mantendrán inalterados:
 
 ```powershell
@@ -575,11 +615,12 @@ La consigna establece como restricción operativa que el pipeline debe poder eje
 
 1. **Cero materialización de datasets en Python:** ningún módulo convierte los archivos mensuales a listas de Python ni a DataFrames de `pandas`. Python actúa exclusivamente como plano de control.
 2. **Descarga HTTP en streaming y hashing incremental:** [`src/ingest.py`](src/ingest.py) descarga y calcula el SHA-256 leyendo bloques de `1 MiB` (`1024 * 1024` bytes), manteniendo un consumo de memoria constante de pocos megabytes sin importar el tamaño del archivo.
-3. **Configuración estricta del motor DuckDB en [`src/config.py`](src/config.py) y [`src/model.py`](src/model.py):**
+3. **Configuración estricta del motor DuckDB en [`src/config.py`](src/config.py), [`src/model.py`](src/model.py) y [`dbt_project/profiles.yml`](dbt_project/profiles.yml):**
    - `memory_limit = "2GB"`: impone un techo duro de 2 GB al buffer pool de DuckDB.
    - `threads = "2"`: acota el paralelismo para evitar picos de memoria por buffers concurrentes entre hilos.
    - `temp_directory = "data/tmp"`: habilita el derrame a disco (*out-of-core spill*) si una operación intermedia supera la memoria asignada.
    - `preserve_insertion_order = "false"`: libera a DuckDB de mantener colas de ordenamiento físico innecesarias al proyectar y exportar Parquet.
+   - dbt utiliza `config_options` con el mismo límite de `2GB`, spill en `data/tmp` y un hilo de ejecución para evitar cambiar el directorio temporal entre cursores.
 4. **Asignación de `trip_id` en streaming sin ordenamiento global:** durante la auditoría de integración se comprobó que ejecutar `row_number() OVER (ORDER BY ...)` sobre 7,49 millones de filas con una columna anidada (`warning_flags` de tipo `LIST<VARCHAR>`) agotaba el presupuesto de 2 GB al paginar el ordenamiento externo. Se optimizó en [`src/model.py`](src/model.py) utilizando una vista temporal (`CREATE OR REPLACE TEMP VIEW _curated`) y `row_number() OVER () AS trip_id`, lo que asigna identificadores únicos secuenciales (`1..7.493.698`) en una sola pasada en streaming y redujo el tamaño del archivo `nyc_taxi.duckdb` de ~950 MB a **531 MB**.
 5. **Escritura directa Parquet-a-Parquet (`COPY ... TO ... FORMAT PARQUET`):** todas las capas intermedias se escriben desde el motor C++ de DuckDB con compresión `ZSTD` hacia archivos temporales `.parquet.tmp` que luego se renoman atómicamente.
 
@@ -587,25 +628,27 @@ La consigna establece como restricción operativa que el pipeline debe poder eje
 
 ## 15. Tiempo de Ejecución y Memoria Verificados
 
-Se registran exclusivamente las mediciones reales obtenidas y documentadas durante las pruebas del proyecto sobre los **7.862.153 registros reales** (`2024-06` y `2025-06`), reutilizando los archivos `raw` ya descargados:
+Se registran las mediciones reales obtenidas durante la integración sobre los **7.862.153 registros reales** (`2024-06` y `2025-06`), reutilizando los archivos `raw` ya descargados. El pico informado es el *Working Set/RSS* sumado del proceso principal y sus procesos hijos; no representa el consumo total de Windows:
 
 | Escenario medido | Tiempo total observado | Pico de RAM medido (Working Set / RSS) | Fuente de evidencia en el repositorio |
 |---|---:|---:|---|
-| **Ejecución parcial (`--hasta-calidad`, Etapas 1 a 3)** | ~`15,0 s` | No se midió RSS del proceso (techo DuckDB: `2 GB`) | [`docs/decisiones_parte_a.md`](docs/decisiones_parte_a.md) |
-| **Ejecución completa (Etapas 1 a 5) en auditoría QA — Corrida 1** | `50,08 s` | ~`2.008 MB` (~`2,01 GB`) | [`docs/revision_integracion.md`](docs/revision_integracion.md) |
-| **Ejecución completa (Etapas 1 a 5) en auditoría QA — Corrida 2 (idempotencia)** | `50,92 s` | ~`2.008 MB` (~`2,01 GB`) | [`docs/revision_integracion.md`](docs/revision_integracion.md) |
-| **Ejecución completa (Etapas 1 a 5) posterior a la optimización de `_curated` y `trip_id`** | ~`33,2 s` (según timestamps de log) | Sin nueva medición de RSS en esa corrida (mantiene `memory_limit='2GB'`) | [`docs/verificacion_parte_a.md`](docs/verificacion_parte_a.md) |
-| **Suite completa de pruebas (`pytest -q`, 17 tests)** | `1,46 s` – `1,67 s` | Ejecución sobre fixtures sintéticos | [`docs/verificacion_parte_a.md`](docs/verificacion_parte_a.md) |
+| **Pipeline completo, modo Python** | `31,36 s` | `2.023 MB` | `data/warehouse/nyc_taxi.duckdb` (532,26 MiB) |
+| **Pipeline completo, modo dbt** | `39,00 s` | `2.001 MB` | `data/warehouse/nyc_taxi_dbt.duckdb` (538,26 MiB) |
+| **Suite completa (`pytest -q`, 18 tests)** | `1,54 s` | Ejecución sobre fixtures sintéticos | Salida local de pytest |
+
+El delta de disco observado durante las ejecuciones fue de aproximadamente **4,36 MB** en modo Python y **2,24 MB** en modo dbt; las capas Parquet existentes se reemplazan atómicamente y las vistas dbt no materializan copias intermedias completas.
 
 ---
 
 ## 16. Limitaciones Conocidas
 
 1. **Concurrencia de procesos sobre un mismo directorio de datos:** DuckDB bloquea el archivo `data/warehouse/nyc_taxi.duckdb` durante la escritura. No se deben ejecutar dos instancias simultáneas del pipeline apuntando al mismo `NYC_TAXI_DATA_DIR`.
-2. **Atomicidad por archivo, no transaccional entre múltiples archivos:** cada Parquet y reporte JSON se publica de forma atómica mediante reemplazo de un temporal (`.tmp`), pero la escritura de `accepted.parquet`, `rejected.parquet` y `quality_YYYY-MM.json` no conforma una transacción distribuida única. Si el proceso se interrumpe a mitad de una etapa, basta con volver a ejecutar el comando para regenerar la etapa de manera idempotente.
-3. **Orden físico e identificador subrogado (`trip_id`):** con `preserve_insertion_order=false` y `row_number() OVER ()`, `trip_id` garantiza unicidad referencial dentro de `fact_trips` en cada corrida, pero el orden físico de las filas en Parquet o el número asignado a un viaje individual puede variar entre reconstrucciones sin afectar ningún conteo ni resultado analítico.
-4. **Umbral analítico en `R03` (200 millas):** el límite superior de 200 millas es una decisión de limpieza operativa para descartar errores graves de taxímetro (como registros de más de 195.000 millas), no una restricción reglamentaria oficial de la TLC.
-5. **Ausencia de propinas en efectivo en la fuente original:** la limitación observada en la consulta 4 para `payment_type = 2` (efectivo) es intrínseca al sistema de captura de NYC TLC, que sólo registra propinas abonadas electrónicamente.
+2. **Warehouses alternativos:** Python y dbt conservan archivos DuckDB independientes (`nyc_taxi.duckdb` y `nyc_taxi_dbt.duckdb`) para evitar conflictos y permitir comparar resultados. El orquestador selecciona un solo constructor por ejecución; no se mantienen dos versiones físicas activas dentro de la misma corrida.
+3. **Atomicidad por archivo, no transaccional entre múltiples archivos:** cada Parquet y reporte JSON se publica de forma atómica mediante reemplazo de un temporal (`.tmp`), pero la escritura de `accepted.parquet`, `rejected.parquet` y `quality_YYYY-MM.json` no conforma una transacción distribuida única. Si el proceso se interrumpe a mitad de una etapa, basta con volver a ejecutar el comando para regenerar la etapa de manera idempotente.
+4. **Orden físico e identificador subrogado (`trip_id`):** con `preserve_insertion_order=false` y `row_number() OVER ()`, `trip_id` garantiza unicidad referencial dentro de `fact_trips` en cada corrida, pero el orden físico de las filas en Parquet o el número asignado a un viaje individual puede variar entre reconstrucciones sin afectar ningún conteo ni resultado analítico.
+5. **Concurrencia dbt limitada:** `dbt-duckdb` se ejecuta con un hilo (`threads: 1`) porque el entorno local comparte el `temp_directory`; el límite sigue siendo compatible con la restricción máxima de dos hilos.
+6. **Umbral analítico en `R03` (200 millas):** el límite superior de 200 millas es una decisión de limpieza operativa para descartar errores graves de taxímetro (como registros de más de 195.000 millas), no una restricción reglamentaria oficial de la TLC.
+7. **Ausencia de propinas en efectivo en la fuente original:** la limitación observada en la consulta 4 para `payment_type = 2` (efectivo) es intrínseca al sistema de captura de NYC TLC, que sólo registra propinas abonadas electrónicamente.
 
 ---
 
@@ -615,6 +658,7 @@ En cumplimiento de las reglas académicas de la cátedra, se declara de manera t
 
 - **OpenAI Codex:** utilizado por los integrantes durante la implementación modular de la Parte A (`src/ingest.py`, `src/schema.py`, `src/quality.py`, `src/pipeline.py`, `contracts/yellow_schema.yaml` y tests unitarios) y de la Parte B (`src/transform.py`, `src/model.py` y consultas SQL iniciales).
 - **Google Antigravity (Gemini):** utilizado para la auditoría de integración entre ambas ramas (`qa/integracion`), la creación de pruebas automatizadas de integración extremo a extremo ([`tests/integration/`](tests/integration/)), la detección y corrección del filtro de `LaGuardia Airport` en [`sql/q5_airports.sql`](sql/q5_airports.sql) y de la generación en streaming de `fact_trips` en [`src/model.py`](src/model.py), y la estructuración de la documentación técnica final.
+- **Asistencia durante la integración dbt:** Codex ayudó a implementar [`dbt_project/`](dbt_project/), el selector `--modelo dbt`, las pruebas declarativas y esta actualización documental; los integrantes ejecutaron las pruebas, contrastaron ambos warehouses y revisaron las decisiones para su defensa.
 
 Todo el código fuente, las reglas de calidad, el contrato de esquema y las consultas SQL fueron revisados, probados sobre los datos reales de NYC TLC y comprendidos íntegramente por los alumnos para su explicación y defensa oral.
 
@@ -627,8 +671,8 @@ Todos los documentos técnicos del repositorio están vinculados mediante rutas 
 - [`RESULTADOS.md`](RESULTADOS.md): salida completa de las 6 consultas SQL sobre el modelo estrella con tablas e interpretaciones.
 - [`AGENTS.md`](AGENTS.md): acuerdos de integración, división de responsabilidades A/B e interfaces de funciones.
 - [`contracts/yellow_schema.yaml`](contracts/yellow_schema.yaml): contrato versionado de esquema destino y políticas ante cambios.
-- [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md): análisis detallado de la arquitectura actual implementada (Python + DuckDB + Parquet) y comparación con la arquitectura evolutiva de referencia (incorporación de dbt y contenedores Docker).
-- [`docs/DEFENSA.md`](docs/DEFENSA.md): guion estructurado de exposición oral dividido entre los dos integrantes, pasos de demostración en vivo y preguntas técnicas probables de la cátedra con sus respuestas.
+- [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md): arquitectura Python y alternativa dbt implementadas, warehouses independientes, límites de recursos y tecnologías pendientes.
+- [`docs/DEFENSA.md`](docs/DEFENSA.md): guion estructurado de exposición oral dividido entre los dos integrantes, demostración de ambos modos y preguntas técnicas probables de la cátedra.
 - [`docs/decisiones_parte_a.md`](docs/decisiones_parte_a.md): fundamentación detallada de la ingesta, contrato de esquema v1, exploración de suciedad real y reglas `R01` a `R08`.
 - [`docs/verificacion_parte_a.md`](docs/verificacion_parte_a.md): evidencia de ejecución de las etapas 1 a 3 y hashes SHA-256 verificados.
 - [`docs/revision_integracion.md`](docs/revision_integracion.md): informe de auditoría de integración QA, diagnóstico de errores corregidos y pruebas agregadas.
