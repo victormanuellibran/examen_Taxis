@@ -3,9 +3,11 @@
 **Materia:** Fundamentos de Datos · Ingeniería en Sistemas de Información (4.° Año — UTN FRT)  
 **Trabajo Práctico / Examen Parcial:** Pipeline Batch Reproducible NYC TLC Yellow Taxi  
 **Repositorio:** `examen_Taxis`  
-**Integrantes **
-- **Integrante 1 Víctor Manuel **
-- **Integrante 2 carlos federico lix klett ** 
+**Integrantes:**
+- **Integrante 1:** Víctor Manuel Libran
+- **Integrante 2:** Carlos Federico Lix Klett
+
+---
 
 ## Tabla de Contenidos
 

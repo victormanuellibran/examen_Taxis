@@ -2,7 +2,7 @@
 
 Este documento organiza la defensa oral del examen para los dos integrantes del equipo. Incluye:
 1. **Protocolo de demostración corta en vivo** (sin volver a descargar los millones de filas desde Internet).
-2. **Guion de exposición oral dividido equitativamente** entre Integrante 1 (Parte A, dbt, Docker y CI) e Integrante 2 (Parte B, Modelo Estrella, Negocio y Auditoría SQL/Rendimiento).
+2. **Guion de exposición oral dividido equitativamente** entre Integrante 1 (Parte A, dbt, Docker y CI) e Integrante 2 (Parte B, Modelo Estrella, Negocio, Auditoría SQL/Rendimiento y orquestación con Dagster).
 3. **Banco de 23 preguntas técnicas probables de la cátedra** con respuestas claras, precisas y fundamentadas en la implementación real.
 
 ---
@@ -106,15 +106,10 @@ docker compose run --rm pipeline python -m pytest -q
 5. **Integración de dbt, Docker Compose y GitHub Actions (1,5 min):**
    - "Además del modo Python, integramos **dbt Core + `dbt-duckdb`** (`--modelo dbt`), que construye `staging` e `intermediate` como vistas sobre la capa curada y materializa los `marts` como tablas en un warehouse separado (`nyc_taxi_dbt.duckdb`), validando **24 pruebas de datos** (`dbt build 32/32`)."
    - "Empaquetamos todo en un contenedor batch con **Docker Compose** (`mem_limit: 4g`, montando `./data:/app/data`) y configuramos **GitHub Actions** ([`.github/workflows/tests.yml`](../.github/workflows/tests.yml)) para correr `pip check`, los 37 tests de `pytest`, `dbt parse` y `dbt compile`."
-6. **Orquestación declarativa con Dagster ([`src/orchestration.py`](../src/orchestration.py)) (1,5 min):**
-   - "Además del pipeline en Python, integramos **Dagster 1.13.31** como orquestador declarativo. El grafo tiene nueve nodos: dos cadenas de cuatro etapas (ingesta → esquema → calidad → transformación, una por período) que convergen en `modelo_estrella`, que necesita ambas capas curadas para comparar."
-   - "Cada `@op` es un envoltorio de tres líneas sobre las funciones que ya existían (`run_ingest`, `run_schema`, etc.). No hay lógica de negocio nueva: Dagster solo coordina el orden y registra metadatos (filas leídas, aceptadas, en cuarentena, violaciones por regla)."
-   - "Usamos `in_process_executor` deliberadamente: DuckDB toma un lock exclusivo por archivo, y dos cadenas en paralelo duplicarían el pico de memoria. No usamos `dagster-dbt` porque duplicaría el grafo que dbt ya resuelve internamente."
-   - "No reemplaza al pipeline tradicional: hay un test que verifica que `src.pipeline` sigue devolviendo 0."
 
 ---
 
-### Bloque 2 — Integrante 2 (Compañero): Transformación, Modelo Estrella, Consultas SQL y Auditoría de Rendimiento (6–7 min)
+### Bloque 2 — Integrante 2 (Carlos Federico Lix Klett): Transformación, Modelo Estrella, Consultas SQL, Auditoría de Rendimiento y Dagster (7–8 min)
 
 1. **Etapa 4 — Capa curada y aislamiento de particiones Hive ([`src/transform.py`](../src/transform.py)) (1,5 min):**
    - "En `run_transform` tomamos `accepted.parquet`, calculamos duración en minutos, velocidad en mph, fecha, hora, día de semana y porcentaje de propina sobre tarifa (cuando `fare_amount > 0`), y enriquecemos origen y destino con el catálogo de zonas."
@@ -129,6 +124,12 @@ docker compose run --rm pipeline python -m pytest -q
    - "**Q4 (Propina por tipo de pago):** tarjeta de crédito (`payment_type = 1`) promedia **25,26 %**; efectivo (`payment_type = 2`, 0,002 %) no es interpretable porque las propinas en efectivo no se registran en el taxímetro."
    - "**Q5 (Aeropuertos JFK y LaGuardia):** tras corregir en QA el filtro a `'%laguardia%'` (sin espacio), obtuvimos **334.938 viajes** (`$56,2601` de tarifa media) en 2024-06 y **346.769 viajes** (`$57,7605`) en 2025-06."
    - "**Q6 (Variación interanual):** los viajes aceptados subieron **+17,75 %** (+610.768) y la tarifa media varió **-$0,1588** (`$19,8668` a `$19,7080`). Como pide la consigna, planteamos una hipótesis de causa: más viajes *Flex Fare* (`payment_type = 0`), más trayectos urbanos cortos y desvío de viajes hacia el taxi tras el peaje CBD de 2025. La presentamos como hipótesis, no como conclusión: dos cortes mensuales no alcanzan para confirmarla sin controlar estacionalidad, oferta de vehículos y otros modos de transporte (mediana en `EXPLAIN ANALYZE` de `54,86 ms`)."
+
+4. **Orquestación declarativa con Dagster ([`src/orchestration.py`](../src/orchestration.py)) (1,5 min):**
+   - "Además del pipeline en Python, integramos **Dagster 1.13.31** como orquestador declarativo. El grafo tiene nueve nodos: dos cadenas de cuatro etapas (ingesta → esquema → calidad → transformación, una por período) que convergen en `modelo_estrella`, que necesita ambas capas curadas para comparar."
+   - "Cada `@op` es un envoltorio de tres líneas sobre las funciones que ya existían (`run_ingest`, `run_schema`, etc.). No hay lógica de negocio nueva: Dagster solo coordina el orden y registra metadatos (filas leídas, aceptadas, en cuarentena, violaciones por regla)."
+   - "Usamos `in_process_executor` deliberadamente: DuckDB toma un lock exclusivo por archivo, y dos cadenas en paralelo duplicarían el pico de memoria. No usamos `dagster-dbt` porque duplicaría el grafo que dbt ya resuelve internamente."
+   - "No reemplaza al pipeline tradicional: hay un test que verifica que `src.pipeline` sigue devolviendo 0."
 
 ---
 
