@@ -1,0 +1,24 @@
+name: nyc_taxi_dbt
+version: 1.0.0
+config-version: 2
+
+profile: nyc_taxi
+
+model-paths: ["models"]
+test-paths: ["tests"]
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  # Se puede reemplazar por una ruta absoluta mediante NYC_TAXI_DATA_DIR.
+  data_dir: "{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}"
+
+models:
+  nyc_taxi_dbt:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table

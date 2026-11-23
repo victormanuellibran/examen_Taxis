@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: taxi_external
+    description: "Archivos aceptados y catálogo TLC producidos por la ingesta Python."
+    schema: external
+    tables:
+      - name: accepted_2024
+        description: "Viajes aceptados de junio de 2024."
+        meta:
+          external_location: "read_parquet('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/validated/yellow/year=2024/month=06/accepted.parquet', hive_partitioning=false)"
+      - name: accepted_2025
+        description: "Viajes aceptados de junio de 2025."
+        meta:
+          external_location: "read_parquet('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/validated/yellow/year=2025/month=06/accepted.parquet', hive_partitioning=false)"
+      - name: taxi_zone_lookup
+        description: "Catálogo oficial de zonas TLC usado para integridad referencial."
+        meta:
+          external_location: "read_csv_auto('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/reference/taxi_zone_lookup.csv')"

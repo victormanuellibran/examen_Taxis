@@ -1,0 +1,17 @@
+nyc_taxi:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('NYC_TAXI_DBT_WAREHOUSE', 'data/warehouse/nyc_taxi_dbt.duckdb') }}"
+      # DuckDB comparte el entorno local entre conexiones; un hilo evita que
+      # dos tests intenten cambiar el directorio temporal simultáneamente.
+      threads: 1
+      # config_options se aplica al abrir la conexión una sola vez. Si estas
+      # opciones fueran `settings`, dbt intentaría SETear temp_directory en
+      # cada cursor y DuckDB lo rechazaría después de la primera consulta.
+      config_options:
+        memory_limit: "2GB"
+        threads: 1
+        temp_directory: "{{ env_var('NYC_TAXI_DBT_TEMP', 'data/tmp') }}"
+        preserve_insertion_order: false
