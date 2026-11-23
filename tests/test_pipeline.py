@@ -25,6 +25,28 @@ def test_full_orchestration_contract(monkeypatch):
     assert calls[-1] == ("model", ["2024-06", "2025-06"])
 
 
+def test_dbt_model_selection_delegates_only_to_dbt_runner(monkeypatch):
+    calls = []
+
+    def stage(name):
+        def run(month, *args):
+            calls.append((name, month, args))
+            return Path(name + month)
+        return run
+
+    for name in ["ingest", "schema", "quality"]:
+        monkeypatch.setattr(pipeline, "run_" + name, stage(name))
+    modules = {
+        "src.transform": SimpleNamespace(run_transform=stage("transform")),
+        "src.dbt_runner": SimpleNamespace(run_model=lambda months: calls.append(("dbt", months))),
+    }
+    monkeypatch.setattr(pipeline.importlib, "import_module", modules.__getitem__)
+
+    assert pipeline.main(["--mes", "2025-06", "--modelo", "dbt"]) == 0
+    assert [call[0] for call in calls] == ["ingest", "schema", "quality", "transform"] * 2 + ["dbt"]
+    assert calls[-1] == ("dbt", ["2024-06", "2025-06"])
+
+
 def test_pipeline_propagates_failure(monkeypatch):
     def fail(month):
         raise ValueError("test failure")

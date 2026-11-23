@@ -54,3 +54,9 @@ models:
         data_tests: [not_null]
       - name: pickup_hour
         data_tests: [not_null]
+  - name: analysis_parameters
+    columns:
+      - name: comparison_month
+        data_tests: [not_null]
+      - name: target_month
+        data_tests: [not_null]

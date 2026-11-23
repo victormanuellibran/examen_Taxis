@@ -1,7 +1,7 @@
 with expected as (
-    select count(*) as row_count from {{ source('taxi_external', 'accepted_2024') }}
+    select count(*) as row_count from {{ source('taxi_external', 'accepted_comparison') }}
     union all
-    select count(*) as row_count from {{ source('taxi_external', 'accepted_2025') }}
+    select count(*) as row_count from {{ source('taxi_external', 'accepted_target') }}
 ), totals as (
     select sum(row_count) as expected_count from expected
 ), actual as (

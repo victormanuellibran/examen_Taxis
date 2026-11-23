@@ -5,14 +5,22 @@ sources:
     description: "Archivos aceptados y catálogo TLC producidos por la ingesta Python."
     schema: external
     tables:
-      - name: accepted_2024
-        description: "Viajes aceptados de junio de 2024."
+      - name: accepted_comparison
+        description: "Viajes aceptados del período de comparación."
         meta:
-          external_location: "read_parquet('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/validated/yellow/year=2024/month=06/accepted.parquet', hive_partitioning=false)"
-      - name: accepted_2025
-        description: "Viajes aceptados de junio de 2025."
+          external_location: "read_parquet('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/validated/yellow/year={{ var('comparison_year') }}/month={{ var('comparison_month_num') }}/accepted.parquet', hive_partitioning=false)"
+      - name: accepted_target
+        description: "Viajes aceptados del período asignado."
         meta:
-          external_location: "read_parquet('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/validated/yellow/year=2025/month=06/accepted.parquet', hive_partitioning=false)"
+          external_location: "read_parquet('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/validated/yellow/year={{ var('target_year') }}/month={{ var('target_month_num') }}/accepted.parquet', hive_partitioning=false)"
+      - name: curated_comparison
+        description: "Capa curada del período de comparación generada por src.transform."
+        meta:
+          external_location: "read_parquet('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/curated/yellow/year={{ var('comparison_year') }}/month={{ var('comparison_month_num') }}/part-000.parquet', hive_partitioning=false)"
+      - name: curated_target
+        description: "Capa curada del período asignado generada por src.transform."
+        meta:
+          external_location: "read_parquet('{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}/curated/yellow/year={{ var('target_year') }}/month={{ var('target_month_num') }}/part-000.parquet', hive_partitioning=false)"
       - name: taxi_zone_lookup
         description: "Catálogo oficial de zonas TLC usado para integridad referencial."
         meta:

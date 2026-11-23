@@ -24,8 +24,20 @@ with unioned as (
         cast(cbd_congestion_fee as double) as cbd_congestion_fee,
         source_file,
         warning_flags,
-        '2024-06' as period_month
-    from {{ source('taxi_external', 'accepted_2024') }}
+        cast(duration_minutes as double) as duration_minutes,
+        cast(average_speed_mph as double) as average_speed_mph,
+        cast(pickup_date as date) as pickup_date,
+        cast(pickup_hour as bigint) as pickup_hour,
+        cast(pickup_day_of_week as bigint) as pickup_day_of_week,
+        cast(tip_pct_fare as double) as tip_pct_fare,
+        pickup_borough,
+        pickup_zone,
+        pickup_service_zone,
+        dropoff_borough,
+        dropoff_zone,
+        dropoff_service_zone,
+        '{{ var('comparison_month') }}' as period_month
+    from {{ source('taxi_external', 'curated_comparison') }}
 
     union all
 
@@ -52,8 +64,20 @@ with unioned as (
         cast(cbd_congestion_fee as double),
         source_file,
         warning_flags,
-        '2025-06' as period_month
-    from {{ source('taxi_external', 'accepted_2025') }}
+        cast(duration_minutes as double),
+        cast(average_speed_mph as double),
+        cast(pickup_date as date),
+        cast(pickup_hour as bigint),
+        cast(pickup_day_of_week as bigint),
+        cast(tip_pct_fare as double),
+        pickup_borough,
+        pickup_zone,
+        pickup_service_zone,
+        dropoff_borough,
+        dropoff_zone,
+        dropoff_service_zone,
+        '{{ var('target_month') }}' as period_month
+    from {{ source('taxi_external', 'curated_target') }}
 )
 
 select * from unioned

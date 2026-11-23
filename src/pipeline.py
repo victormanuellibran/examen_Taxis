@@ -14,6 +14,7 @@ LOG = logging.getLogger(__name__)
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Pipeline NYC Taxi: mes indicado y mismo mes del año anterior")
     parser.add_argument("--mes", default="2025-06")
+    parser.add_argument("--modelo", choices=("python", "dbt"), default="python", help="Motor de modelado; python es el modo compatible por defecto")
     parser.add_argument("--hasta-calidad", action="store_true", help="Ejecutar sólo la parte A; no requiere módulos B")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -23,9 +24,10 @@ def main(argv=None) -> int:
         if not args.hasta_calidad:
             try:
                 transform = importlib.import_module("src.transform").run_transform
-                model = importlib.import_module("src.model").run_model
+                model_module = "src.dbt_runner" if args.modelo == "dbt" else "src.model"
+                model = importlib.import_module(model_module).run_model
             except (ModuleNotFoundError, AttributeError) as exc:
-                raise RuntimeError("No se pudo cargar la integración B: src.transform.run_transform y src.model.run_model. Para probar A usar --hasta-calidad.") from exc
+                raise RuntimeError("No se pudo cargar la integración de transformación/modelado. Para probar A usar --hasta-calidad.") from exc
         for period in months:
             LOG.info("Procesando %s", period)
             accepted = run_quality(period, run_schema(period, run_ingest(period)))
@@ -33,7 +35,7 @@ def main(argv=None) -> int:
                 transform(period, accepted)
         if not args.hasta_calidad:
             model(months)
-        LOG.info("Finalizó %s para %s", "la ejecución parcial hasta calidad" if args.hasta_calidad else "el pipeline completo", months)
+        LOG.info("Finalizó %s para %s con modelo=%s", "la ejecución parcial hasta calidad" if args.hasta_calidad else "el pipeline completo", months, args.modelo)
         return 0
     except Exception:
         LOG.exception("El pipeline falló")

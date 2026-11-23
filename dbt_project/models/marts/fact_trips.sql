@@ -1,10 +1,8 @@
 {{ config(materialized='table') }}
 
 select
-    row_number() over (
-        order by tpep_pickup_datetime, tpep_dropoff_datetime, source_file,
-                 pu_location_id, do_location_id, total_amount, trip_distance
-    ) as trip_id,
+    -- Identificador incremental sin ordenar las 7,5 M filas en memoria.
+    row_number() over () as trip_id,
     cast(strftime(pickup_date, '%Y%m%d') as integer) as date_key,
     period_month,
     pickup_date,

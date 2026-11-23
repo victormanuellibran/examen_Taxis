@@ -11,8 +11,13 @@ clean-targets:
   - "dbt_packages"
 
 vars:
-  # Se puede reemplazar por una ruta absoluta mediante NYC_TAXI_DATA_DIR.
-  data_dir: "{{ env_var('NYC_TAXI_DATA_DIR', 'data') }}"
+  # El orquestador reemplaza estos valores con --vars para cada ejecución.
+  comparison_month: "2024-06"
+  target_month: "2025-06"
+  comparison_year: 2024
+  comparison_month_num: "06"
+  target_year: 2025
+  target_month_num: "06"
 
 models:
   nyc_taxi_dbt:
