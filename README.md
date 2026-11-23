@@ -3,11 +3,9 @@
 **Materia:** Fundamentos de Datos · Ingeniería en Sistemas de Información (4.° Año — UTN FRT)  
 **Trabajo Práctico / Examen Parcial:** Pipeline Batch Reproducible NYC TLC Yellow Taxi  
 **Repositorio:** `examen_Taxis`  
-**Integrantes y distribución del desarrollo:**
-- **Integrante 1 (Víctor Manuel Libran — Parte A: Ingesta, Esquema, Calidad, Orquestación, Integración dbt/Docker/CI):** módulos [`src/config.py`](src/config.py), [`src/ingest.py`](src/ingest.py), [`src/schema.py`](src/schema.py), [`src/quality.py`](src/quality.py), [`src/pipeline.py`](src/pipeline.py), [`src/dbt_runner.py`](src/dbt_runner.py), [`src/results.py`](src/results.py), contrato [`contracts/yellow_schema.yaml`](contracts/yellow_schema.yaml), proyecto [`dbt_project/`](dbt_project/), configuración Docker ([`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml)), workflow [`.github/workflows/tests.yml`](.github/workflows/tests.yml) y pruebas unitarias.
-- **Integrante 2 (Compañero de equipo — Parte B: Transformación Curada, Modelo Dimensional, Consultas SQL y Auditoría QA):** módulos [`src/transform.py`](src/transform.py), [`src/model.py`](src/model.py), consultas [`sql/`](sql/), reporte [`RESULTADOS.md`](RESULTADOS.md), pruebas de integración en [`tests/integration/`](tests/integration/) y auditoría SQL/rendimiento.
-
----
+**Integrantes **
+- **Integrante 1 Víctor Manuel **
+- **Integrante 2 carlos federico lix klett ** 
 
 ## Tabla de Contenidos
 
