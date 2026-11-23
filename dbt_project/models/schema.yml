@@ -1,0 +1,62 @@
+version: 2
+
+models:
+  - name: stg_yellow_trips
+    description: "Union tipada de los viajes aceptados de junio 2024 y junio 2025."
+    columns:
+      - name: source_file
+        data_tests: [not_null]
+      - name: warning_flags
+        data_tests: [not_null]
+  - name: stg_taxi_zones
+    columns:
+      - name: zone_id
+        data_tests: [not_null, unique]
+  - name: fact_trips
+    description: "Hecho granular: una fila por viaje aceptado."
+    columns:
+      - name: trip_id
+        data_tests: [not_null, unique]
+      - name: date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: pickup_zone_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_zone')
+                field: zone_id
+      - name: dropoff_zone_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_zone')
+                field: zone_id
+  - name: dim_zone
+    columns:
+      - name: zone_id
+        data_tests: [not_null, unique]
+  - name: dim_date
+    columns:
+      - name: date_key
+        data_tests: [not_null, unique]
+  - name: agg_zone_hour
+    columns:
+      - name: pickup_zone_id
+        data_tests: [not_null]
+      - name: pickup_date
+        data_tests: [not_null]
+      - name: pickup_hour
+        data_tests: [not_null]
+  - name: analysis_parameters
+    columns:
+      - name: comparison_month
+        data_tests: [not_null]
+      - name: target_month
+        data_tests: [not_null]

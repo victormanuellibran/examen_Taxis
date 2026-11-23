@@ -1,0 +1,23 @@
+services:
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: examen-nyc-taxi:latest
+    container_name: nyc_taxi_pipeline
+    working_dir: /app
+    environment:
+      NYC_TAXI_DATA_DIR: /app/data
+      NYC_TAXI_DBT_WAREHOUSE: /app/data/warehouse/nyc_taxi_dbt.duckdb
+      NYC_TAXI_DBT_TEMP: /app/data/tmp
+      DBT_PROJECT_DIR: /app/dbt_project
+      DBT_PROFILES_DIR: /app/dbt_project
+      DBT_TARGET_PATH: /tmp/dbt_target
+      DBT_LOG_PATH: /tmp/dbt_logs
+    volumes:
+      - ./data:/app/data
+      - ./RESULTADOS.md:/app/RESULTADOS.md
+    mem_limit: 4g
+    cpus: 2.0
+    restart: "no"
+    command: ["python", "-m", "src.pipeline", "--mes", "2025-06"]

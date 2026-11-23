@@ -1,0 +1,29 @@
+name: nyc_taxi_dbt
+version: 1.0.0
+config-version: 2
+
+profile: nyc_taxi
+
+model-paths: ["models"]
+test-paths: ["tests"]
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  # El orquestador reemplaza estos valores con --vars para cada ejecución.
+  comparison_month: "2024-06"
+  target_month: "2025-06"
+  comparison_year: 2024
+  comparison_month_num: "06"
+  target_year: 2025
+  target_month_num: "06"
+
+models:
+  nyc_taxi_dbt:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
