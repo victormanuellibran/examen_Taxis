@@ -3,7 +3,7 @@
 Este documento organiza la defensa oral del examen para los dos integrantes del equipo. Incluye:
 1. **Protocolo de demostración corta en vivo** (sin volver a descargar los millones de filas desde Internet).
 2. **Guion de exposición oral dividido equitativamente** entre Integrante 1 (Parte A, dbt, Docker y CI) e Integrante 2 (Parte B, Modelo Estrella, Negocio y Auditoría SQL/Rendimiento).
-3. **Banco de 20 preguntas técnicas probables de la cátedra** con respuestas claras, precisas y fundamentadas en la implementación real.
+3. **Banco de 23 preguntas técnicas probables de la cátedra** con respuestas claras, precisas y fundamentadas en la implementación real.
 
 ---
 
@@ -11,12 +11,12 @@ Este documento organiza la defensa oral del examen para los dos integrantes del 
 
 La demostración está diseñada para ejecutarse en **menos de 2 minutos** reutilizando los archivos Parquet oficiales ya presentes en `data/raw/` (validados por hash SHA-256 sin tráfico de red).
 
-### Paso 1: Ejecutar la suite de 28 pruebas automatizadas (`pytest`, ~1,6 segundos)
+### Paso 1: Ejecutar la suite de 37 pruebas automatizadas (`pytest`, ~2 segundos)
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v
 ```
 *Qué explicar al tribunal:*
-- Pasan los **28 tests** (unitarios, parametrización dinámica de meses, selector excluyente de motor y pruebas de integración extremo a extremo) usando datos sintéticos en directorios temporales sin tocar `data/`.
+- Pasan los **37 tests** (unitarios, parametrización dinámica de meses, selector excluyente de motor, orquestación Dagster y pruebas de integración extremo a extremo) usando datos sintéticos en directorios temporales sin tocar `data/`.
 
 ### Paso 2: Correr el pipeline completo y demostrar idempotencia (~31–38 segundos)
 ```powershell
@@ -65,7 +65,22 @@ for r in rows:
 '@ | .\.venv\Scripts\python.exe -
 ```
 
-### Paso 5 (Opcional): Mostrar ejecución en Docker o cambio dinámico a Mayo (`2025-05`)
+### Paso 5: Mostrar Dagster como orquestador declarativo (~1 minuto)
+```powershell
+.\.venv\Scripts\dagster.exe dev -m src.orchestration
+```
+*Qué señalar en la interfaz (`http://127.0.0.1:3000`):*
+- En **Overview → Jobs → `pipeline_nyc_taxi`**, mostrar el DAG de nueve nodos y señalar que `modelo_estrella` depende de ambas transformaciones.
+- En **Launchpad**, lanzar una ejecución con `mes: "2025-06"` y `modelo: "python"`. La ingesta sale como `reused` (archivos cacheados por SHA-256).
+- Abrir la etapa `calidad_asignado` y mostrar los metadatos: filas leídas, aceptadas, en cuarentena y violaciones por regla, directamente en la interfaz.
+- Para demostrar manejo de errores: lanzar con `mes: "2025-13"`. La ingesta falla con `Mes inválido` y las etapas dependientes quedan sin ejecutar.
+- Cerrar con `Ctrl+C` (no queda ningún servicio corriendo de fondo).
+
+*Qué explicar al tribunal:*
+- Dagster no procesa datos: DuckDB sigue haciendo todo el cómputo. Dagster solo coordina el orden y registra los resultados.
+- El pipeline tradicional (`src/pipeline.py`) sigue funcionando sin cambios; Dagster es una capa adicional.
+
+### Paso 6 (Opcional): Mostrar ejecución en Docker o cambio dinámico a Mayo (`2025-05`)
 ```powershell
 docker compose run --rm pipeline python -m pytest -q
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-05 --modelo dbt
@@ -90,7 +105,12 @@ docker compose run --rm pipeline python -m pytest -q
    - "Verificamos `leídas == aceptadas + cuarentena` tanto en memoria como re-contando los Parquet escritos: en junio de 2024, `3.539.193 = 3.441.465 + 97.728`; en junio de 2025, `4.322.960 = 4.052.233 + 270.727`."
 5. **Integración de dbt, Docker Compose y GitHub Actions (1,5 min):**
    - "Además del modo Python, integramos **dbt Core + `dbt-duckdb`** (`--modelo dbt`), que construye `staging` e `intermediate` como vistas sobre la capa curada y materializa los `marts` como tablas en un warehouse separado (`nyc_taxi_dbt.duckdb`), validando **24 pruebas de datos** (`dbt build 32/32`)."
-   - "Empaquetamos todo en un contenedor batch con **Docker Compose** (`mem_limit: 4g`, montando `./data:/app/data`) y configuramos **GitHub Actions** ([`.github/workflows/tests.yml`](../.github/workflows/tests.yml)) para correr `pip check`, los 28 tests de `pytest`, `dbt parse` y `dbt compile`."
+   - "Empaquetamos todo en un contenedor batch con **Docker Compose** (`mem_limit: 4g`, montando `./data:/app/data`) y configuramos **GitHub Actions** ([`.github/workflows/tests.yml`](../.github/workflows/tests.yml)) para correr `pip check`, los 37 tests de `pytest`, `dbt parse` y `dbt compile`."
+6. **Orquestación declarativa con Dagster ([`src/orchestration.py`](../src/orchestration.py)) (1,5 min):**
+   - "Además del pipeline en Python, integramos **Dagster 1.13.31** como orquestador declarativo. El grafo tiene nueve nodos: dos cadenas de cuatro etapas (ingesta → esquema → calidad → transformación, una por período) que convergen en `modelo_estrella`, que necesita ambas capas curadas para comparar."
+   - "Cada `@op` es un envoltorio de tres líneas sobre las funciones que ya existían (`run_ingest`, `run_schema`, etc.). No hay lógica de negocio nueva: Dagster solo coordina el orden y registra metadatos (filas leídas, aceptadas, en cuarentena, violaciones por regla)."
+   - "Usamos `in_process_executor` deliberadamente: DuckDB toma un lock exclusivo por archivo, y dos cadenas en paralelo duplicarían el pico de memoria. No usamos `dagster-dbt` porque duplicaría el grafo que dbt ya resuelve internamente."
+   - "No reemplaza al pipeline tradicional: hay un test que verifica que `src.pipeline` sigue devolviendo 0."
 
 ---
 
@@ -108,11 +128,11 @@ docker compose run --rm pipeline python -m pytest -q
    - "**Q3 (Cargo CBD):** en junio de 2025 el **73,73 %** de los viajes aceptados (2.987.770 de 4.052.233) tiene `cbd_congestion_fee > 0`. En el top 5 por proporción aparece primero `Rikers Island` con 100 % porque tuvo 1 solo viaje (`1/1`), seguido por zonas del CBD de Manhattan (`Greenwich Village South`, `West Village`, `SoHo`, `Greenwich Village North`) con ~99,8 % sobre más de 33.000 a 88.000 viajes. Por eso destacamos la importancia de leer el porcentaje junto con su denominador."
    - "**Q4 (Propina por tipo de pago):** tarjeta de crédito (`payment_type = 1`) promedia **25,26 %**; efectivo (`payment_type = 2`, 0,002 %) no es interpretable porque las propinas en efectivo no se registran en el taxímetro."
    - "**Q5 (Aeropuertos JFK y LaGuardia):** tras corregir en QA el filtro a `'%laguardia%'` (sin espacio), obtuvimos **334.938 viajes** (`$56,2601` de tarifa media) en 2024-06 y **346.769 viajes** (`$57,7605`) en 2025-06."
-   - "**Q6 (Variación interanual):** los viajes aceptados subieron **+17,75 %** (+610.768) y la tarifa media varió **-$0,1588** (`$19,8668` a `$19,7080`). Aclaramos que es un resultado descriptivo sobre viajes aceptados (mediana en `EXPLAIN ANALYZE` de `54,86 ms`) y no una prueba de causalidad directa."
+   - "**Q6 (Variación interanual):** los viajes aceptados subieron **+17,75 %** (+610.768) y la tarifa media varió **-$0,1588** (`$19,8668` a `$19,7080`). Como pide la consigna, planteamos una hipótesis de causa: más viajes *Flex Fare* (`payment_type = 0`), más trayectos urbanos cortos y desvío de viajes hacia el taxi tras el peaje CBD de 2025. La presentamos como hipótesis, no como conclusión: dos cortes mensuales no alcanzan para confirmarla sin controlar estacionalidad, oferta de vehículos y otros modos de transporte (mediana en `EXPLAIN ANALYZE` de `54,86 ms`)."
 
 ---
 
-## 3. Banco de 20 Preguntas Técnicas Probables y Respuestas de Defensa
+## 3. Banco de 23 Preguntas Técnicas Probables y Respuestas de Defensa
 
 ### 1. ¿El pipeline sigue un enfoque ETL o ELT?
 **Respuesta:** Combina ambos de forma pragmática (un patrón *EtLT* sobre Data Lakehouse local). Las etapas 1 a 4 actúan como un **ETL de limpieza y curación física** hacia Parquet (`raw` $\rightarrow$ `staging` $\rightarrow$ `validated`/`quarantine` $\rightarrow$ `curated`) para garantizar que ningún dato corrupto ingrese al modelo analítico. Luego, la etapa 5 (especialmente en `--modelo dbt`) aplica **ELT dentro de DuckDB**: expone los Parquet curados como fuentes externas (`source()`) y ejecuta las transformaciones dimensionales (`staging` $\rightarrow$ `intermediate` $\rightarrow$ `marts`) directamente en SQL dentro del motor DuckDB.
@@ -162,7 +182,7 @@ docker compose run --rm pipeline python -m pytest -q
 **Respuesta:** En [`.dockerignore`](../.dockerignore) excluimos `data/` para que la imagen sea liviana y no contenga cientos de megabytes de datos crudos. En [`docker-compose.yml`](../docker-compose.yml) montamos `./data:/app/data` y `./RESULTADOS.md:/app/RESULTADOS.md` como *bind mounts*. Así, el contenedor lee y reutiliza los archivos `raw` del host (verificando su SHA-256 sin re-descargarlos) y escribe los Parquet curados y los warehouses `.duckdb` directamente en la carpeta `data/` de Windows, por lo que al eliminar el contenedor (`--rm` o `docker compose down`) no se pierde ningún dato.
 
 ### 13. ¿Qué valida GitHub Actions y por qué no ejecuta `dbt build` ni descarga los Parquet de NYC TLC en la nube?
-**Respuesta:** El workflow [`.github/workflows/tests.yml`](../.github/workflows/tests.yml) se dispara en cada `push` o `pull_request` sobre Ubuntu con Python 3.12 y ejecuta `pip check`, `pytest -q` (los 28 tests con datos sintéticos), `dbt parse` y `dbt compile`. No descarga los Parquet reales (~133 MB por par de meses) ni corre `dbt build` en los runners de GitHub porque eso demoraría varios minutos y consumiría ancho de banda externo en cada commit; las pruebas sobre datos reales se ejecutan localmente o en el contenedor Docker con `./data` persistente.
+**Respuesta:** El workflow [`.github/workflows/tests.yml`](../.github/workflows/tests.yml) se dispara en cada `push` o `pull_request` sobre Ubuntu con Python 3.12 y ejecuta `pip check`, `pytest -q` (los 37 tests con datos sintéticos), `dbt parse` y `dbt compile`. No descarga los Parquet reales (~133 MB por par de meses) ni corre `dbt build` en los runners de GitHub porque eso demoraría varios minutos y consumiría ancho de banda externo en cada commit; las pruebas sobre datos reales se ejecutan localmente o en el contenedor Docker con `./data` persistente.
 
 ### 14. ¿Qué mostró el análisis con `EXPLAIN ANALYZE` sobre las consultas SQL?
 **Respuesta:** En [`docs/RENDIMIENTO.md`](../docs/RENDIMIENTO.md) inspeccionamos los planes físicos de DuckDB sobre los 7,49 millones de viajes de `fact_trips`:
@@ -188,7 +208,16 @@ Esto confirma que para el volumen del examen los escaneos columnares vectorizado
 ### 19. ¿Qué mide exactamente `q6_month_variation.sql` y por qué no demuestra causalidad?
 **Respuesta:** `q6_month_variation.sql` mide la variación interanual sobre los **viajes aceptados** en `fact_trips` (los que superaron las reglas de calidad `R01`–`R08`): entre junio de 2024 (`3.441.465` viajes, tarifa media `$19,8668`) y junio de 2025 (`4.052.233` viajes, tarifa media `$19,7080`), el volumen aceptado subió `+17,75 %` (`+610.768` viajes) y la tarifa media bajó `-$0,1588`. Aunque formulamos una hipótesis plausible (expansión de viajes *Flex Fare* `payment_type = 0` y mayor proporción de viajes cortos tras el peaje CBD), enfatizamos que una comparación descriptiva de dos meses no demuestra causalidad estadística sin aislar tendencias plurianuales, clima, oferta de licencias y otros medios de transporte.
 
-### 20. ¿Es `fact_trips.trip_id` único y estable entre reconstrucciones?
+### 20. ¿Qué es Dagster y qué aporta sobre el pipeline en Python?
+**Respuesta:** Dagster es un orquestador declarativo de pipelines de datos. El pipeline ya corría de punta a punta con [`src/pipeline.py`](../src/pipeline.py), que llama a las cinco etapas en secuencia. Dagster aporta tres cosas: (1) **el grafo de dependencias es explícito y verificable** — es un DAG de nueve nodos que se puede inspeccionar, testear y dibujar, en lugar de un orden implícito en las líneas de un `for`; (2) **observabilidad por etapa** — cada op registra metadatos (filas leídas, aceptadas, en cuarentena, violaciones por regla) visibles en la interfaz web; (3) **reejecución parcial** — si falla la etapa 4, se puede relanzar desde ahí sin repetir la ingesta. Dagster no procesa datos: DuckDB y dbt siguen haciendo todo el cómputo.
+
+### 21. ¿Por qué usaron `in_process_executor` y no ejecución paralela?
+**Respuesta:** Por dos razones técnicas: (1) DuckDB toma un lock exclusivo por archivo `.duckdb` durante la escritura, por lo que dos escritores simultáneos fallarían; (2) aunque las dos cadenas del grafo son independientes, correrlas en paralelo duplicaría el pico de memoria (dos instancias de DuckDB con `memory_limit=2GB` cada una), excediendo potencialmente la restricción de 8 GB. Con ejecución secuencial, el perfil de memoria es el mismo que el del pipeline tradicional.
+
+### 22. ¿Por qué no usaron `dagster-dbt` para integrar dbt?
+**Respuesta:** `dagster-dbt` expone cada modelo dbt como un asset de Dagster, lo que duplicaría el grafo: los modelos dbt ya tienen su propio DAG declarado en `dbt_project/` resuelto por `source()` y `ref()`. Como [`src/dbt_runner.py`](../src/dbt_runner.py) ya encapsula `dbt build` correctamente y propaga el código de salida, Dagster lo invoca como una etapa más. Si en el futuro se quisiera ver los modelos dbt nodo por nodo en la interfaz de Dagster, `dagster-dbt` sería el camino, con el costo de complejidad que implica.
+
+### 23. ¿Es `fact_trips.trip_id` único y estable entre reconstrucciones?
 **Respuesta:**
 - **Unicidad:** Sí, `trip_id` es **100 % único** dentro de cada construcción del warehouse (`COUNT(*) == COUNT(DISTINCT trip_id) == 7.493.698`), verificado tanto por script como por el test `unique_fact_trips_trip_id` de dbt.
 - **Estabilidad entre reconstrucciones:** Como se genera mediante `row_number() OVER ()` sin un `ORDER BY` global (y con `preserve_insertion_order=false` para no desbordar los 2 GB de RAM ordenando 7,5 millones de filas con listas anidadas), actúa como una **clave subrogada técnica de la corrida**. Si en una reconstrucción futura DuckDB lee los bloques Parquet en distinto orden de hilos, el número asignado a un viaje individual puede cambiar sin alterar ningún conteo, relación con dimensiones ni resultado de las 6 consultas. Si en un sistema productivo se requiriera una clave persistente entre corridas, se podría calcular un hash determinista (`md5` o `xxhash64`) sobre las columnas naturales del viaje.

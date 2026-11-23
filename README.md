@@ -48,7 +48,8 @@ Construir un **pipeline batch reproducible, idempotente y trazable** que ejecute
 - **Selección dinámica de períodos:** recibe `--mes YYYY-MM` (por defecto `2025-06`) y procesa automáticamente ese mes junto con el mismo mes del año anterior (`YYYY-1-MM`), verificado con datos reales tanto para **junio (`2024-06` vs `2025-06`)** como para **mayo (`2024-05` vs `2025-05`)**.
 - **Dos motores de modelado excluyentes e integrados:** `--modelo python` (predeterminado, en `data/warehouse/nyc_taxi.duckdb`) y `--modelo dbt` (`dbt-core` + `dbt-duckdb`, en `data/warehouse/nyc_taxi_dbt.duckdb`), que producen conteos y respuestas equivalentes para las seis consultas.
 - **Doble modalidad de ejecución:** local nativa mediante entorno virtual `.venv` y contenedorizada mediante **Docker / Docker Compose**.
-- **Verificación automatizada:** **28 tests en `pytest`**, **24 data tests en `dbt`** (`32/32` tareas en `dbt build`) y validación continua configurada en **GitHub Actions**.
+- **Orquestación con Dagster:** capa opcional de orquestación declarativa ([`src/orchestration.py`](src/orchestration.py)) que expone el pipeline como un DAG de nueve nodos con observabilidad por etapa y reejecución parcial desde interfaz web (`dagster dev -m src.orchestration`).
+- **Verificación automatizada:** **37 tests en `pytest`**, **24 data tests en `dbt`** (`32/32` tareas en `dbt build`) y validación continua configurada en **GitHub Actions**.
 
 ---
 
@@ -176,7 +177,7 @@ flowchart LR
     end
 
     subgraph QA_CI["Calidad de Software y CI"]
-        PYT["Suite pytest (28 tests)\ntests/ + tests/integration/"]
+        PYT["Suite pytest (37 tests)\ntests/ + tests/integration/"]
         GHA["GitHub Actions (.github/workflows/tests.yml)\npip check + pytest + dbt parse/compile"]
     end
 
@@ -242,9 +243,10 @@ Todas las dependencias se encuentran fijadas en [`requirements.txt`](requirement
 | **dbt-core + dbt-duckdb** | `1.12.7` / `1.11.1` | Modelado dimensional declarativo (`staging`, `intermediate`, `marts`) con linaje explícito (`source()`, `ref()`) y 24 pruebas de integridad (`dbt build` / `dbt test`). |
 | **PyYAML** | `6.0.3` | Lectura del contrato de esquema versionado [`contracts/yellow_schema.yaml`](contracts/yellow_schema.yaml). |
 | **Requests** | `2.32.5` | Descarga HTTP en streaming de bloques de 1 MiB con *timeouts* `(15, 120)` s y reintentos exponenciales. |
-| **pytest** | `9.0.2` | Suite de 28 pruebas unitarias y de integración sobre datos sintéticos sin dependencia de Internet. |
+| **pytest** | `9.0.2` | Suite de 37 pruebas unitarias, de integración y de orquestación sobre datos sintéticos sin dependencia de Internet. |
 | **Docker + Docker Compose** | Engine `29.x` / Compose `v5` | Empaquetado reproducible del entorno Linux (`python:3.12-slim` + `git` + `requirements.txt`) con volumen persistente `./data:/app/data` y límite `mem_limit: 4g`. |
 | **GitHub Actions** | `ubuntu-latest` (Python `3.12`) | Integración continua liviana (`.github/workflows/tests.yml`): `pip check`, `pytest -q`, `dbt parse` y `dbt compile`. |
+| **Dagster** | `1.13.31` | Orquestador declarativo de pipelines. Define un DAG de nueve nodos (dos cadenas de cuatro etapas convergiendo en el modelo estrella), registra metadatos por etapa (filas leídas, aceptadas, en cuarentena) y ofrece interfaz web (`dagster dev`) para observar, lanzar y relanzar ejecuciones. Documentado en [`docs/DAGSTER.md`](docs/DAGSTER.md). |
 
 ---
 
@@ -480,7 +482,7 @@ El repositorio cuenta con el workflow [`.github/workflows/tests.yml`](.github/wo
 - **Pasos que ejecuta:**
   1. Instala exactamente las dependencias de [`requirements.txt`](requirements.txt).
   2. Verifica la consistencia de paquetes con `python -m pip check`.
-  3. Ejecuta la suite completa de 28 pruebas sintéticas con `python -m pytest -q`.
+  3. Ejecuta la suite completa de 37 pruebas sintéticas con `python -m pytest -q`.
   4. Valida estáticamente el proyecto dbt con `dbt parse` y `dbt compile` usando directorios temporales del runner y variables explícitas de período.
 - **Qué no ejecuta deliberadamente:** no descarga los cientos de megabytes de Parquet desde NYC TLC ni corre `dbt build` sobre datos reales en los runners de GitHub, evitando tiempos elevados y tráfico innecesario en cada commit.
 - **Estado de verificación:** todos los comandos del workflow fueron ejecutados y validados localmente; la primera ejecución remota en la pestaña *Actions* de GitHub tendrá lugar una vez que se publique (`git push`) la rama al repositorio remoto.
@@ -491,13 +493,14 @@ El repositorio cuenta con el workflow [`.github/workflows/tests.yml`](.github/wo
 
 La calidad del software y de los datos se verifica en dos niveles complementarios:
 
-1. **Suite Python (`pytest -q` $\rightarrow$ `28 passed`):**
+1. **Suite Python (`pytest -q` $\rightarrow$ `37 passed`):**
    - [`tests/test_ingest.py`](tests/test_ingest.py): idempotencia de descargas, detección de corrupción por SHA-256 y limpieza de `.part` tras 3 reintentos fallidos de red.
    - [`tests/test_schema.py`](tests/test_schema.py): mapeo a `snake_case`, inyección de `cbd_congestion_fee = NULL::DOUBLE` en 2024, obligatoriedad en 2025 y rechazo de *schema drift*.
    - [`tests/test_quality.py`](tests/test_quality.py) y [`tests/test_reconciliation.py`](tests/test_reconciliation.py): las 8 reglas `R01`–`R08`, múltiples violaciones en una misma fila y falla ante desbalance de conteos.
    - [`tests/test_pipeline.py`](tests/test_pipeline.py): contrato del orquestador, delegación excluyente a `src.model` o `src.dbt_runner` y propagación de errores.
    - [`tests/test_dynamic_months.py`](tests/test_dynamic_months.py): validación de meses dinámicos (`2025-01` a `2025-12`), variables Jinja de dbt, manejo de HTTP 404 para meses futuros e interpretaciones parametrizadas en [`src/results.py`](src/results.py).
    - [`tests/integration/test_integration_pipeline.py`](tests/integration/test_integration_pipeline.py) y [`tests/integration/test_sql_business_rules.py`](tests/integration/test_sql_business_rules.py): corrida extremo a extremo de las 5 etapas con datos sintéticos, idempotencia en doble corrida, aislamiento físico de particiones Hive y regresión SQL para `LaGuardia Airport`.
+   - [`tests/test_orchestration.py`](tests/test_orchestration.py): estructura del grafo Dagster (9 nodos y dependencias), resolución de períodos, validación de configuración, corrida completa e idempotencia, compatibilidad con `src.pipeline` y propagación de errores.
 2. **Suite declarativa dbt (`dbt build` $\rightarrow$ `32/32 PASS`; `dbt test` $\rightarrow$ `24/24 PASS`):**
    - 21 tests genéricos en [`dbt_project/models/schema.yml`](dbt_project/models/schema.yml) (`not_null`, `unique` y `relationships` entre `fact_trips`, `dim_zone` y `dim_date`).
    - 3 tests singulares SQL en [`dbt_project/tests/`](dbt_project/tests/): [`agg_zone_hour_reconciles.sql`](dbt_project/tests/agg_zone_hour_reconciles.sql), [`fact_trip_count_matches_sources.sql`](dbt_project/tests/fact_trip_count_matches_sources.sql) y [`fact_zone_referential_integrity.sql`](dbt_project/tests/fact_zone_referential_integrity.sql).
@@ -563,7 +566,8 @@ examen_Taxis/
 │   ├── ARQUITECTURA.md                            # Arquitecturas Python y dbt, Docker Compose y GitHub Actions
 │   ├── AUDITORIA_TECNICA.md                       # Auditoría SQL (Q1–Q6), integridad del modelo y estabilidad de claves
 │   ├── CI.md                                      # Documentación del flujo de Integración Continua
-│   ├── DEFENSA.md                                 # Guion de defensa oral para 2 integrantes y 20 preguntas técnicas
+│   ├── DEFENSA.md                                 # Guion de defensa oral para 2 integrantes y 23 preguntas técnicas
+│   ├── DAGSTER.md                                 # Orquestación Dagster: DAG, configuración, demo y pruebas
 │   ├── DOCKER.md                                  # Guía completa de Docker, Compose, volúmenes y memoria
 │   ├── RENDIMIENTO.md                             # Tiempos, memoria y análisis EXPLAIN ANALYZE de consultas
 │   ├── decisiones_parte_a.md                      # Fundamentación de ingesta, contrato YAML y reglas R01–R08
@@ -587,7 +591,8 @@ examen_Taxis/
 │   ├── model.py                                   # Etapa 5 (modo Python): Modelo estrella en nyc_taxi.duckdb
 │   ├── dbt_runner.py                              # Etapa 5 (modo dbt): dbt build en nyc_taxi_dbt.duckdb
 │   ├── results.py                                 # Formateo e interpretación dinámica de RESULTADOS.md
-│   └── pipeline.py                                # CLI único (--mes YYYY-MM --modelo python|dbt --hasta-calidad)
+│   ├── pipeline.py                                # CLI único (--mes YYYY-MM --modelo python|dbt --hasta-calidad)
+│   └── orchestration.py                           # Orquestación Dagster: DAG de 9 nodos, recurso PipelineParams
 ├── tests/
 │   ├── test_dynamic_months.py                     # 11 pruebas de parametrización dinámica de meses y errores 404
 │   ├── test_ingest.py                             # Pruebas de idempotencia SHA-256 y fallas de red
@@ -595,6 +600,7 @@ examen_Taxis/
 │   ├── test_quality.py                            # Pruebas de las 8 reglas y múltiples violaciones
 │   ├── test_reconciliation.py                     # Pruebas de reconciliación exacta
 │   ├── test_schema.py                             # Pruebas de contrato, nulo tipado 2024 y drift
+│   ├── test_orchestration.py                      # Pruebas de Dagster: grafo, períodos, corrida completa e idempotencia
 │   └── integration/
 │       ├── test_integration_pipeline.py           # Prueba extremo a extremo (5 etapas), idempotencia y aislamiento Hive
 │       └── test_sql_business_rules.py             # Prueba de regresión SQL para JFK y LaGuardia
@@ -627,7 +633,7 @@ python -m venv .venv
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v
 ```
-Resultado esperado: **`28 passed`**.
+Resultado esperado: **`37 passed`**.
 
 ### 18.3. Ejecución local del pipeline en modo Python (predeterminado)
 
@@ -658,7 +664,7 @@ Resultado esperado: **`28 passed`**.
 docker compose config
 docker compose build
 
-# 2. Ejecutar los 28 tests de pytest y dbt debug dentro del contenedor
+# 2. Ejecutar los 37 tests de pytest y dbt debug dentro del contenedor
 docker compose run --rm pipeline python -m pytest -v
 docker compose run --rm pipeline dbt debug --project-dir /app/dbt_project --profiles-dir /app/dbt_project
 
@@ -705,7 +711,7 @@ for name, path in [("python", "data/warehouse/nyc_taxi.duckdb"), ("dbt", "data/w
 1. **Un único proceso escritor por warehouse:** DuckDB bloquea el archivo `.duckdb` durante la escritura. No deben correrse dos instancias simultáneas del pipeline escribiendo sobre el mismo directorio `data/`.
 2. **Estabilidad de `trip_id` entre reconstrucciones:** `fact_trips.trip_id` se genera en streaming mediante `row_number() OVER ()` (con `preserve_insertion_order=false`). Esto garantiza unicidad total (`100 %` de claves únicas y sin huérfanos) dentro de cada corrida sin agotar los 2 GB de RAM, pero el entero asignado a un viaje individual no constituye una clave natural persistente entre reconstrucciones si cambia el orden físico de lectura.
 3. **Lectura de porcentajes con denominador pequeño en Q3:** `q3_cbd_fee.sql` ordena por proporción (`pct_zone_with_cbd_fee DESC`) tal como pide el enunciado, por lo que una zona con un único viaje que pagó el cargo (`Rikers Island`, `1/1 = 100 %`) encabeza la lista antes de las zonas céntricas de Manhattan (~`99,8 %` con decenas de miles de viajes). Por ello la tabla expone explícitamente numerador y denominador (`trips_with_fee` y `trips_in_zone`).
-4. **Carácter descriptivo de Q6:** la variación interanual (`+17,75 %` en viajes aceptados y `-$0,16` en tarifa media en junio) se calcula sobre viajes que superaron las reglas de calidad y no permite inferir causalidad directa de una política pública a partir de dos cortes mensuales.
+4. **Carácter descriptivo de Q6:** la variación interanual (`+17,75 %` en viajes aceptados y `-$0,16` en tarifa media en junio) se calcula sobre viajes que superaron las reglas de calidad y no permite inferir causalidad directa de una política pública a partir de dos cortes mensuales. Por eso [`RESULTADOS.md`](RESULTADOS.md) formula la causa (Flex Fare, viajes cortos y peaje CBD) explícitamente como hipótesis a contrastar.
 5. **Hardware de medición de RAM:** los límites de `2 GB` en DuckDB y `4 GiB` en Docker fueron verificados empíricamente (~`1,85–2,02 GB` observados), pero en una PC anfitriona de 16 GB; queda pendiente una corrida en una notebook física de 8 GB (donde con Docker Desktop debe sumarse el consumo de WSL 2).
 6. **Ausencia de propinas en efectivo en la fuente TLC:** en `payment_type = 2` (efectivo), `tip_amount` es cercano a `0 %` porque el sistema oficial de taxímetros no registra propinas abonadas en mano.
 
@@ -717,7 +723,8 @@ for name, path in [("python", "data/warehouse/nyc_taxi.duckdb"), ("dbt", "data/w
 - [`AGENTS.md`](AGENTS.md): acuerdos de integración, ramas y contratos de funciones entre módulos.
 - [`contracts/yellow_schema.yaml`](contracts/yellow_schema.yaml): contrato versionado de esquema v1 (20 columnas y políticas de evolución).
 - [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md): explicación detallada de las dos arquitecturas implementadas (Python y Python + dbt), infraestructura Docker Compose y automatización con GitHub Actions.
-- [`docs/DEFENSA.md`](docs/DEFENSA.md): protocolo de demostración corta en vivo, guion de exposición oral para ambos integrantes y banco de 20 preguntas técnicas con respuestas.
+- [`docs/DAGSTER.md`](docs/DAGSTER.md): orquestación con Dagster — DAG de nueve nodos, configuración de períodos y motor, integración con dbt, restricción de 8 GB, pruebas y guía de demostración.
+- [`docs/DEFENSA.md`](docs/DEFENSA.md): protocolo de demostración corta en vivo, guion de exposición oral para ambos integrantes y banco de preguntas técnicas con respuestas.
 - [`docs/DOCKER.md`](docs/DOCKER.md): guía conceptual y práctica de imagen, contenedor, Docker Compose, volúmenes y memoria.
 - [`docs/CI.md`](docs/CI.md): alcance, pasos y verificación del workflow de GitHub Actions.
 - [`docs/AUDITORIA_TECNICA.md`](docs/AUDITORIA_TECNICA.md): auditoría de las consultas Q1–Q6, corrección de clave de zona en Q1 y análisis de estabilidad de `trip_id`.
@@ -735,5 +742,6 @@ En cumplimiento de las normas académicas de la cátedra, se declara de forma ve
 
 - **OpenAI Codex:** utilizado como asistente para la codificación modular de las etapas de ingesta, validación de esquema, calidad, transformación y modelo en Python, la implementación del proyecto `dbt_project/` y el selector `--modelo dbt`, la parametrización dinámica de meses, el workflow de GitHub Actions y la auditoría técnica de planes SQL (`EXPLAIN ANALYZE`).
 - **Google Antigravity (Gemini):** utilizado para la auditoría de integración entre ramas (`qa/integracion`), el desarrollo de pruebas de integración extremo a extremo ([`tests/integration/`](tests/integration/)), la detección y corrección del filtro de `LaGuardia Airport` en [`sql/q5_airports.sql`](sql/q5_airports.sql) y de la generación en streaming de `fact_trips`, la dockerización del pipeline ([`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml), [`docs/DOCKER.md`](docs/DOCKER.md)) y la consolidación de la documentación técnica final.
+- **Claude (Anthropic):** utilizado para la integración de Dagster como orquestador declarativo ([`src/orchestration.py`](src/orchestration.py), [`tests/test_orchestration.py`](tests/test_orchestration.py), [`docs/DAGSTER.md`](docs/DAGSTER.md)), la resolución de conflictos de dependencias entre Dagster y dbt (`protobuf`/`grpcio-health-checking`) y la corrección de la hipótesis de causa en Q6 ([`src/results.py`](src/results.py)).
 
 Todas las decisiones de arquitectura, umbrales de calidad, consultas SQL y métricas de rendimiento fueron verificadas sobre los datos oficiales de NYC TLC y son comprendidas en su totalidad por los integrantes para su defensa oral.

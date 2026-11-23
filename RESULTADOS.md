@@ -155,4 +155,4 @@ FROM p JOIN summary c ON c.month = p.comparison_month JOIN summary t ON t.month 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2024-06 | 2025-06 | 3441465 | 4052233 | 610768 | 17.7500 | 19.8668 | 19.7080 | -0.1588 |
 
-Entre 2024-06 y 2025-06, la variación porcentual de viajes es 17.7500 % y la variación de tarifa media es -0.1588. Son resultados descriptivos; no se atribuye causalidad sin otras series y controles.
+Entre 2024-06 y 2025-06, la variación porcentual de viajes es 17.7500 % y la variación de tarifa media es -0.1588. Hipótesis de causa: el aumento de volumen con tarifa media casi estable es compatible con una mayor proporción de viajes Flex Fare (payment_type = 0) y de trayectos urbanos cortos e intermedios, sumado al desvío de viajes hacia el taxi tras la entrada en vigor del peaje CBD en 2025. Es una hipótesis, no una conclusión: dos cortes mensuales no la confirman sin controlar estacionalidad plurianual, oferta de vehículos y otros modos de transporte.
