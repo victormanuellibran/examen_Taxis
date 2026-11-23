@@ -13,7 +13,7 @@ RULES = [
     {"id": "R05", "description": "Pasajeros nulos o no positivos", "severity": "warning", "threshold": "passenger_count > 0", "justification": "Dato incompleto que no impide analizar tiempo, zona e importe."},
     {"id": "R06", "description": "Origen o destino nulo o ausente del catálogo", "severity": "reject", "threshold": "ambas zonas presentes", "justification": "Se requiere integridad referencial; 264/265 se conservan si existen en TLC."},
     {"id": "R07", "description": "Repetición exacta de todos los valores del viaje", "severity": "reject", "threshold": "una copia por conjunto de valores", "justification": "Conservar una ocurrencia y poner las restantes en cuarentena evita duplicar métricas."},
-    {"id": "R08", "description": "Propina negativa", "severity": "warning", "threshold": "tip_amount < 0", "justification": "Exploración real: 108 casos en 2024-06 y 367 en 2025-06; pueden ser reversos, se señalan sin excluir por sí solos."},
+    {"id": "R08", "description": "Propina negativa", "severity": "warning", "threshold": "tip_amount < 0", "justification": "Puede representar un reverso; se señala sin excluir por sí sola."},
 ]
 
 

@@ -113,6 +113,13 @@ def ensure_file(url: str, path: Path) -> Path:
 
 def run_ingest(month: str) -> Path:
     parse_month(month)
-    ensure_file(f"{BASE}/misc/taxi_zone_lookup.csv", data_dir() / "reference" / "taxi_zone_lookup.csv")
     name = f"yellow_tripdata_{month}.parquet"
-    return ensure_file(f"{BASE}/trip-data/{name}", monthly_path("raw", month, name))
+    url = f"{BASE}/trip-data/{name}"
+    ensure_file(f"{BASE}/misc/taxi_zone_lookup.csv", data_dir() / "reference" / "taxi_zone_lookup.csv")
+    try:
+        return ensure_file(url, monthly_path("raw", month, name))
+    except requests.HTTPError as exc:
+        status = getattr(exc.response, "status_code", None)
+        if status == 404:
+            raise FileNotFoundError(f"El archivo oficial del período {month} no está publicado: {url}") from exc
+        raise

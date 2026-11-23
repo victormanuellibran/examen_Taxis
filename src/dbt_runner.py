@@ -14,7 +14,7 @@ from pathlib import Path
 import duckdb
 
 from .config import ROOT, data_dir, parse_month
-from .model import _markdown
+from .results import render_results
 
 LOG = logging.getLogger(__name__)
 DBT_PROJECT_DIR = ROOT / "dbt_project"
@@ -103,32 +103,8 @@ def _write_business_results(months: list[str]) -> None:
     finally:
         con.close()
 
-    comparison_month, target_month = months
-    output = [
-        "# Resultados del modelo NYC Taxi",
-        "",
-        f"Motor: `dbt`; mes comparado: `{comparison_month}`; mes asignado: `{target_month}`.",
-        "",
-    ]
-    for name, query, description, rows in results:
-        headers = [item[0] for item in description]
-        output.extend(
-            [
-                f"## {name}",
-                "",
-                "Consulta:",
-                "```sql",
-                query,
-                "```",
-                "",
-                _markdown(headers, rows),
-                "",
-                "Consulta ejecutada sobre el warehouse DuckDB generado por dbt.",
-                "",
-            ]
-        )
     output_path = ROOT / "RESULTADOS.md"
-    output_path.write_text("\n".join(output), encoding="utf-8")
+    render_results(output_path, months, "dbt", results)
     LOG.info("Consultas de negocio dbt ejecutadas y resultados escritos en %s", output_path)
 
 

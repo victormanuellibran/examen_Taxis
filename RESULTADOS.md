@@ -1,6 +1,6 @@
 # Resultados del modelo NYC Taxi
 
-Mes comparado: `2024-06`; mes asignado: `2025-06`.
+Motor: `dbt`; mes comparado: `2024-06`; mes asignado: `2025-06`.
 
 ## q1_top_zones.sql
 
@@ -35,7 +35,7 @@ ORDER BY t.target_trips DESC LIMIT 10;
 | LaGuardia Airport | 108971 | 112984 | -3.5500 |
 | Murray Hill | 108388 | 101329 | 6.9700 |
 
-El ranking muestra las 10 zonas de origen con mayor volumen en 2025-06 y su variación porcentual frente a 2024-06 (lideradas por JFK Airport y Upper East Side South).
+El ranking muestra las zonas de origen con más viajes en 2025-06; la primera es JFK Airport con 170.662 viajes y variación 12.1500 % frente a 2024-06.
 
 ## q2_peak_revenue_hour.sql
 
@@ -55,7 +55,7 @@ LIMIT 1;
 | --- | --- | --- | --- |
 | 5 | 33314 | 1085064.6000 | 32.5708 |
 
-Las 05:00 h registran el mayor ingreso promedio por viaje ($32,57). La consulta sólo agrupa por hora; no permite atribuir ese resultado a aeropuertos ni a una causa específica.
+La hora 5:00 presenta el mayor ingreso promedio por viaje en 2025-06 (32.5708). La consulta no permite atribuir causalidad ni separar aeropuertos sin análisis adicional.
 
 ## q3_cbd_fee.sql
 
@@ -86,7 +86,7 @@ FROM zone_rates z;
 | 4052233 | 2987770 | 73.7314 | SoHo | 33833 | 33907 | 99.7818 |
 | 4052233 | 2987770 | 73.7314 | Greenwich Village North | 54600 | 54720 | 99.7807 |
 
-El 73,73 % de los viajes aceptados en 2025-06 registra cbd_congestion_fee > 0; Rikers Island aparece con 100 % por tener un único viaje (1/1), seguido por zonas del CBD en Manhattan (~99,8 % con más de 33.000 viajes cada una).
+En 2025-06, 2987770 de 4052233 viajes registran cbd_congestion_fee > 0 (73.7314 %). La zona superior por proporción es Rikers Island (100.0000 %); siempre debe leerse junto con su denominador.
 
 ## q4_tip_by_payment.sql
 
@@ -109,7 +109,7 @@ GROUP BY payment_type ORDER BY payment_type;
 | 4 | 48899 | 0.0334 |
 | 5 | 1 | 0.0000 |
 
-El tipo 1 (tarjeta de crédito) promedia 25,26 % de propina sobre tarifa. TLC define el tipo 0 como Flex Fare y el tipo 2 como efectivo; las propinas en efectivo no se incluyen en tip_amount, por lo que el promedio del tipo 2 no mide la propina real. El tipo 0 tampoco debe interpretarse como un medio de pago tradicional.
+La consulta compara la propina registrada como porcentaje de tarifa por tipo de pago. Las propinas en efectivo no se registran completamente en tip_amount, por lo que ese grupo no mide toda la propina real.
 
 ## q5_airports.sql
 
@@ -132,7 +132,7 @@ GROUP BY month ORDER BY month;
 | 2024-06 | 334938 | 56.2601 |
 | 2025-06 | 346769 | 57.7605 |
 
-Se identifican JFK Airport y LaGuardia Airport por nombre de zona (origen o destino): en 2025-06 suman 346.769 viajes con tarifa media de $57,76 frente a 334.938 viajes y $56,26 en 2024-06.
+Se identifican viajes con origen o destino en JFK o LaGuardia para los períodos comparados: 2024-06: 334.938 viajes, tarifa media 56.2601; 2025-06: 346.769 viajes, tarifa media 57.7605.
 
 ## q6_month_variation.sql
 
@@ -155,7 +155,4 @@ FROM p JOIN summary c ON c.month = p.comparison_month JOIN summary t ON t.month 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2024-06 | 2025-06 | 3441465 | 4052233 | 610768 | 17.7500 | 19.8668 | 19.7080 | -0.1588 |
 
-Observación: los viajes aceptados subieron 17,75 % y la tarifa media bajó $0,16.
-Hipótesis: una mayor participación de viajes Flex Fare (payment_type = 0) y de trayectos urbanos puede contribuir a ese patrón.
-El cargo cbd_congestion_fee aparece en 2025, pero estos datos descriptivos no demuestran que haya causado el aumento de viajes.
-La relación causal requeriría comparar otros períodos y controlar estacionalidad, oferta y demanda.
+Entre 2024-06 y 2025-06, la variación porcentual de viajes es 17.7500 % y la variación de tarifa media es -0.1588. Son resultados descriptivos; no se atribuye causalidad sin otras series y controles.
