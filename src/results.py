@@ -64,7 +64,15 @@ def interpret(query_name: str, headers: Sequence[str], rows: list[tuple], months
     if query_name == "q6_month_variation.sql":
         trip_pct = _value(headers, first, "trip_variation_pct")
         fare_delta = _value(headers, first, "average_fare_variation")
-        return f"Entre {comparison} y {target}, la variación porcentual de viajes es {_number(trip_pct)} % y la variación de tarifa media es {_number(fare_delta)}. Son resultados descriptivos; no se atribuye causalidad sin otras series y controles."
+        return (
+            f"Entre {comparison} y {target}, la variación porcentual de viajes es {_number(trip_pct)} % "
+            f"y la variación de tarifa media es {_number(fare_delta)}. "
+            "Hipótesis de causa: el aumento de volumen con tarifa media casi estable es compatible con una mayor "
+            "proporción de viajes Flex Fare (payment_type = 0) y de trayectos urbanos cortos e intermedios, "
+            "sumado al desvío de viajes hacia el taxi tras la entrada en vigor del peaje CBD en 2025. "
+            "Es una hipótesis, no una conclusión: dos cortes mensuales no la confirman sin controlar "
+            "estacionalidad plurianual, oferta de vehículos y otros modos de transporte."
+        )
     return f"Resultado calculado para {comparison} y {target}."
 
 

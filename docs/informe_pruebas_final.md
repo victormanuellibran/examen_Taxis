@@ -35,7 +35,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Resultado esperado: `17 passed`.
+Resultado esperado: `28 passed`.
 
 ## Pipeline completo
 
