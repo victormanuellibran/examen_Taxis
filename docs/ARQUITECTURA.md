@@ -16,6 +16,7 @@ Para evitar confusiones conceptuales frecuentes en la defensa oral, se define co
 | **dbt Core + `dbt-duckdb`** | Framework declarativo de transformación y testing SQL/Jinja. | Compilar los modelos `staging`, `intermediate` y `marts` (`source()` y `ref()`), enviarlos a DuckDB para materializarlos en `nyc_taxi_dbt.duckdb` y ejecutar 24 pruebas de datos. | **No es un motor SQL ni una base de datos:** el motor que ejecuta el SQL compilado por dbt sigue siendo DuckDB. |
 | **Docker / Docker Compose** | Plataforma de contenedores Linux sobre WSL 2. | Empaquetar Python 3.12, `git` y las librerías exactas de `requirements.txt` en una imagen reproducible (`examen-nyc-taxi:latest`) que monta `./data:/app/data`. | **No es una base de datos ni reemplaza a `.venv`:** es un contenedor batch efímero que se detiene al terminar la corrida. |
 | **GitHub Actions** | Plataforma de Integración Continua (CI) en la nube. | Ejecutar en cada `push` o `pull_request` verificaciones livianas (`pip check`, `pytest -q`, `dbt parse` y `dbt compile`) sin descargar datasets grandes. | No ejecuta el pipeline sobre los Parquet reales de NYC TLC ni reemplaza las corridas locales. |
+| **Dagster 1.13.31** | Orquestador declarativo de pipelines de datos. | Declarar las cinco etapas como un DAG de nueve nodos ([`../src/orchestration.py`](../src/orchestration.py)), registrar metadatos por etapa (filas leídas, aceptadas, en cuarentena), ofrecer interfaz web para lanzar y relanzar ejecuciones y permitir reejecución parcial desde la etapa que falló. | **No es un motor de procesamiento:** no reemplaza a DuckDB ni a dbt; sólo coordina cuándo y en qué orden se invocan las piezas existentes. No es un reemplazo del orquestador en Python (`src/pipeline.py`), que sigue intacto. |
 
 ---
 
@@ -145,5 +146,40 @@ El archivo [`../.github/workflows/tests.yml`](../.github/workflows/tests.yml) (e
 
 1. Aprovisiona un entorno limpio `ubuntu-latest` con **Python 3.12**.
 2. Instala [`../requirements.txt`](../requirements.txt) y ejecuta `python -m pip check`.
-3. Corre `python -m pytest -q` (los **28 tests** unitarios y de integración sobre fixtures sintéticos).
+3. Corre `python -m pytest -q` (los **37 tests** unitarios, de integración y de orquestación sobre fixtures sintéticos).
 4. Ejecuta `dbt parse` y `dbt compile` apuntando a directorios temporales del runner para verificar que el proyecto [`../dbt_project/`](../dbt_project/), sus macros Jinja, `sources.yml`, `schema.yml` y `profiles.yml` compilen sin errores antes de integrar cambios.
+
+---
+
+## 8. Orquestación Declarativa con Dagster
+
+Además del orquestador en Python ([`../src/pipeline.py`](../src/pipeline.py)), el pipeline cuenta con una capa de orquestación declarativa implementada en [`../src/orchestration.py`](../src/orchestration.py) usando **Dagster 1.13.31**. La documentación completa está en [`DAGSTER.md`](DAGSTER.md).
+
+### 8.1. DAG de nueve nodos
+
+El grafo tiene **dos cadenas paralelas** de cuatro etapas (una por período) que **convergen en un nodo de modelado**:
+
+```
+ingesta_comparacion → esquema_comparacion → calidad_comparacion → transformacion_comparacion ┐
+                                                                                             ├→ modelo_estrella
+ingesta_asignado    → esquema_asignado    → calidad_asignado    → transformacion_asignado    ┘
+```
+
+Cada `@op` es un envoltorio de tres líneas que resuelve el mes desde la configuración, llama a la función existente (`run_ingest`, `run_schema`, `run_quality`, `run_transform` o `run_model`) y adjunta metadatos para la interfaz. **No hay lógica de negocio nueva.**
+
+### 8.2. Configuración y ejecución
+
+El recurso `PipelineParams` acepta `mes` (por defecto `2025-06`) y `modelo` (`python` o `dbt`). Para lanzar la interfaz web:
+
+```powershell
+.\.venv\Scripts\dagster.exe dev -m src.orchestration
+```
+
+Desde `http://127.0.0.1:3000` se puede inspeccionar el DAG, lanzar ejecuciones y ver los metadatos de cada etapa (filas leídas, aceptadas, en cuarentena, violaciones por regla).
+
+### 8.3. Decisiones de diseño
+
+- **`in_process_executor` (secuencial):** DuckDB toma un lock exclusivo por archivo, y dos cadenas en paralelo duplicarían el pico de memoria. Ejecución secuencial mantiene el mismo perfil de ~2 GB.
+- **Ops, no assets:** el pipeline es un proceso secuencial sobre archivos, no un catálogo de tablas versionadas.
+- **Sin `dagster-dbt`:** esa integración duplicaría el grafo (los modelos dbt ya tienen su propio DAG en `dbt_project/`). `src/dbt_runner.py` encapsula `dbt build` correctamente.
+- **Convivencia con dbt en `requirements.txt`:** Dagster arrastra `protobuf 7.x`, incompatible con `dbt-common` (`protobuf <7`). Se resuelve fijando `protobuf==6.33.6` y `grpcio-health-checking==1.81.2`.
