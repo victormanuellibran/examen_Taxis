@@ -1,0 +1,14 @@
+.git/
+.venv/
+.tools/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.tmp
+*.part
+*.egg-info/
+data/
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+dbt_project/.user.yml
