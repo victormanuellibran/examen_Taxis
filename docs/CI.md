@@ -1,25 +1,51 @@
-# Integración continua
+# GitHub Actions: pruebas automáticas
 
-La integración continua (CI) ejecuta automáticamente verificaciones reproducibles cada vez que se sube un cambio (`push`) o se abre/actualiza un pull request (`pull_request`). En este repositorio la implementa GitHub Actions mediante el workflow `.github/workflows/tests.yml`.
+El workflow está en [../.github/workflows/tests.yml](../.github/workflows/tests.yml). Se ejecuta en cada `push` y `pull_request`.
 
-## Qué ejecuta
+## Qué hace
 
-El job usa Ubuntu y Python 3.12, instala exactamente `requirements.txt`, verifica las dependencias con `python -m pip check` y ejecuta `python -m pytest -q`. También valida la configuración de dbt con `dbt parse` y `dbt compile`, usando directorios temporales del runner y variables de período explícitas.
+En un checkout limpio de Ubuntu y Python 3.12:
 
-## Qué no ejecuta
+1. instala `requirements.txt`;
+2. ejecuta `python -m pip check`;
+3. ejecuta `python -m pytest -q`;
+4. ejecuta `dbt parse` y `dbt compile` con directorios temporales.
 
-CI no descarga Parquet de NYC TLC, no ejecuta `dbt build`, no construye los warehouses completos y no levanta Docker, PostgreSQL, Grafana, Prometheus ni Dozzle. Esas tareas requieren los datasets reales y un consumo de recursos que no corresponde a cada push. Las pruebas locales o de entrega deben ejecutar el pipeline completo cuando se necesite validar datos reales.
+No descarga los Parquet reales ni construye los warehouses completos. Esas pruebas se ejecutan localmente o con Docker.
 
-## Interpretación del resultado
+## Comprobarlo localmente
 
-- Un workflow aprobado indica que las dependencias, los 37 tests pytest y la compilación estática de dbt pasaron en un checkout limpio.
-- Un workflow fallido debe revisarse desde el job que aparece en la pestaña **Actions** del repositorio. El primer paso rojo contiene el error que debe corregirse.
-- Que CI esté aprobado no reemplaza la validación de conteos, reconciliación, relaciones y consultas sobre los Parquet oficiales.
+Desde la raíz del proyecto:
 
-## Cómo comprobarlo en GitHub
+```powershell
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\dbt.exe parse --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe compile --project-dir dbt_project --profiles-dir dbt_project
+```
 
-1. Abrir la pestaña **Actions** del repositorio `victormanuellibran/examen_Taxis`.
-2. Seleccionar el workflow **Tests** y una ejecución asociada al commit o pull request.
-3. Revisar los pasos `pytest`, `pip check` y `Validar proyecto dbt sin datasets reales`.
+Resultado esperado:
 
-La ejecución real en GitHub debe comprobarse después de publicar la rama. Mientras no se autorice el push, sólo puede afirmarse que el workflow fue validado localmente.
+- `No broken requirements found`.
+- `37 passed`.
+- dbt termina con código `0`.
+
+## Revisar una ejecución en GitHub
+
+1. Abrir la pestaña **Actions** del repositorio.
+2. Seleccionar el workflow **Tests**.
+3. Abrir la ejecución asociada al commit o pull request.
+4. Revisar los pasos `pip check`, `pytest` y `dbt parse/compile`.
+
+Una ejecución verde confirma que el código y las validaciones livianas funcionan en un entorno limpio. No reemplaza la corrida con los datos oficiales.
+
+## Si falla
+
+Abrir el paso marcado en rojo y leer el primer error. Los casos más comunes son:
+
+| Error | Revisión |
+|---|---|
+| Fallo de pytest | Ejecutar el mismo test localmente con `-v`. |
+| Dependencias incompatibles | Comparar `requirements.txt` y repetir `pip check`. |
+| dbt no encuentra el proyecto | Comprobar `--project-dir` y `--profiles-dir`. |
+| Falta un archivo de datos | No es un problema del workflow: CI no usa datasets grandes. |

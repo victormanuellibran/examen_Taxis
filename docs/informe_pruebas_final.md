@@ -1,35 +1,30 @@
 # Informe de pruebas final
 
-Guía de verificación del repositorio `examen_Taxis` para PowerShell y los períodos `2024-06` y `2025-06`.
+Guía rápida para verificar el repositorio en Windows PowerShell.
 
-## Obtener el código
+## 1. Obtener el código
 
 ```powershell
 git clone https://github.com/victormanuellibran/examen_Taxis.git
 Set-Location examen_Taxis
-git branch --show-current
+git switch main
+git pull --ff-only origin main
 git log -1 --oneline
 ```
 
-La rama debe ser `main` y el commit debe ser `0e63429` o posterior.
+No ejecutar los comandos desde `C:\Windows\System32`. Todos los pasos siguientes parten de la raíz del proyecto.
 
-## Preparar Python
-
-Ejecutar desde la raíz del repositorio, no desde `C:\Windows\System32`:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Si `python` no está disponible:
+## 2. Crear el entorno
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip check
 ```
 
-## Tests
+Si `.venv` ya existe, sólo ejecutar `pip check`.
+
+## 3. Ejecutar tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
@@ -37,80 +32,99 @@ py -3.12 -m venv .venv
 
 Resultado esperado: `37 passed`.
 
-## Pipeline completo
+## 4. Ejecutar el pipeline completo
 
-No ejecutar dos procesos simultáneamente sobre el mismo `data/warehouse/nyc_taxi.duckdb`.
+### Python
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06
 ```
 
-Debe terminar con `Finalizó el pipeline completo para ['2024-06', '2025-06']`.
+Procesa `2024-06` y `2025-06` y escribe `data/warehouse/nyc_taxi.duckdb`.
 
-Conteos reales de referencia:
+### dbt
+
+```powershell
+.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --modelo dbt
+```
+
+Escribe `data/warehouse/nyc_taxi_dbt.duckdb`.
+
+### Sólo hasta calidad
+
+```powershell
+.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --hasta-calidad
+```
+
+## 5. Conteos de referencia
 
 | Mes | Leídas | Aceptadas | Cuarentena |
 |---|---:|---:|---:|
 | 2024-06 | 3.539.193 | 3.441.465 | 97.728 |
 | 2025-06 | 4.322.960 | 4.052.233 | 270.727 |
 
-## Sólo Parte A
+La reconciliación debe cumplir `leídas = aceptadas + cuarentena`.
 
-```powershell
-.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --hasta-calidad
-```
-
-Debe terminar con `Finalizó la ejecución parcial hasta calidad para ['2024-06', '2025-06']`.
-
-## Archivos esperados
-
-Después de la ejecución completa deben existir:
-
-```text
-data/control/ingestion_log.csv
-data/reference/taxi_zone_lookup.csv
-data/reports/schema_2024-06.json
-data/reports/schema_2025-06.json
-data/reports/quality_2024-06.json
-data/reports/quality_2025-06.json
-data/validated/yellow/year=2024/month=06/accepted.parquet
-data/validated/yellow/year=2025/month=06/accepted.parquet
-data/quarantine/yellow/year=2024/month=06/rejected.parquet
-data/quarantine/yellow/year=2025/month=06/rejected.parquet
-data/curated/yellow/year=2024/month=06/part-000.parquet
-data/curated/yellow/year=2025/month=06/part-000.parquet
-data/warehouse/nyc_taxi.duckdb
-RESULTADOS.md
-```
-
-`data/` está excluido de Git y se descarga o genera localmente.
-
-## Comprobación del warehouse
+## 6. Comprobar el warehouse
 
 ```powershell
 @'
 import duckdb
-con = duckdb.connect("data/warehouse/nyc_taxi.duckdb", read_only=True)
-for table in ["dim_zone", "dim_date", "fact_trips", "agg_zone_hour"]:
-    print(table, con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
-print("trip_id_unicos", con.execute("SELECT count(*) = count(DISTINCT trip_id) FROM fact_trips").fetchone()[0])
-print("viajes_agregados", con.execute("SELECT sum(trips) FROM agg_zone_hour").fetchone()[0])
-con.close()
+for path in ["data/warehouse/nyc_taxi.duckdb", "data/warehouse/nyc_taxi_dbt.duckdb"]:
+    con = duckdb.connect(path, read_only=True)
+    print(path)
+    for table in ["dim_zone", "dim_date", "fact_trips", "agg_zone_hour"]:
+        print(table, con.execute("SELECT count(*) FROM " + table).fetchone()[0])
+    print("trip_id_unicos", con.execute("SELECT count(*) = count(DISTINCT trip_id) FROM fact_trips").fetchone()[0])
+    print("viajes_agregados", con.execute("SELECT sum(trips) FROM agg_zone_hour").fetchone()[0])
+    con.close()
 '@ | .\.venv\Scripts\python.exe -
 ```
 
-Resultados esperados: `dim_zone 265`, `dim_date 60`, `fact_trips 7493698`, `agg_zone_hour 210698`, `trip_id_unicos True` y `viajes_agregados 7493698`.
+Para junio, ambos warehouses deben tener `dim_zone=265`, `fact_trips=7.493.698`, `trip_id_unicos=True` y `viajes_agregados=7.493.698`.
 
-## Repetición e idempotencia
+## 7. Ejecutar dbt y Dagster
 
-Volver a ejecutar el pipeline completo. Los logs deben mostrar `reused` para los raw, sin nuevas descargas ni cambios en los conteos. El reprocesamiento de `2025-06` no modifica la partición curada de `2024-06`.
+```powershell
+.\.venv\Scripts\dbt.exe debug --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe parse --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe compile --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe build --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe test --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dagster.exe dev -m src.orchestration
+```
 
-## Errores frecuentes
+Para Dagster, abrir `http://127.0.0.1:3000`, seleccionar el job `pipeline_nyc_taxi`, definir `mes` y `modelo`, y lanzar la ejecución. Cerrar con `Ctrl+C`.
 
-- `\.\.venv` no existe: ubicarse en la raíz y crear el entorno virtual.
-- `No module named pip`: recrear `.venv` con `py -3.12 -m venv .venv`.
-- DuckDB ocupado: cerrar otras ejecuciones y correr una sola instancia.
-- Primera ejecución lenta: descarga los Parquet; las siguientes reutilizan los hashes.
-- No borrar `data/raw/`: esos archivos son la fuente original inmutable.
+## 8. Ejecutar Docker (opcional)
 
-Con `17 passed`, pipeline completo con código 0, reconciliación exacta, `trip_id` único y suma agregada igual a `fact_trips`, la prueba queda aprobada para la defensa.
+```powershell
+docker compose config
+docker compose build
+docker compose run --rm pipeline python -m pytest -q
+docker compose run --rm pipeline python -m src.pipeline --mes 2025-06 --modelo python
+docker compose down --remove-orphans
+```
+
+## 9. Repetir la ejecución
+
+Volver a ejecutar el mismo comando. Los archivos raw deben mostrar `reused` y los conteos no deben duplicarse. No correr dos procesos sobre la misma carpeta `data/`.
+
+## 10. Errores frecuentes
+
+| Mensaje | Solución |
+|---|---|
+| `.venv\\Scripts\\python.exe` no se reconoce | Volver a la raíz del repositorio. |
+| `No module named pip` | Crear de nuevo `.venv` con `py -3.12 -m venv .venv`. |
+| `DuckDB file is locked` | Detener la ejecución anterior. |
+| `Mes inválido` | Usar el formato `YYYY-MM`. |
+| Falta un Parquet | Verificar que el período esté publicado por NYC TLC. |
+
+## 11. Resultado de referencia
+
+La última verificación local de la rama de documentación produjo:
+
+- `37 passed` en pytest.
+- `pip check` sin errores.
+- `dbt parse` y `dbt compile` correctos.
+- Importación de Dagster correcta.
