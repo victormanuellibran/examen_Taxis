@@ -844,51 +844,7 @@ Los resultados de referencia de junio de 2025 se mantienen en RESULTADOS.md: 4.0
 
 ---
 
-## 20. Preguntas técnicas frecuentes
 
-1. **¿Qué es un pipeline?** Es una secuencia reproducible de etapas que transforma datos desde la fuente hasta resultados analíticos.
-2. **¿Por qué es batch?** Procesa archivos completos por período y termina; no mantiene un proceso permanente de eventos.
-3. **¿Qué es streaming en la descarga?** La respuesta HTTP se escribe por bloques en disco, sin cargar todo el Parquet en RAM.
-4. **¿Qué es SHA-256?** Es un hash que permite comprobar que un archivo local coincide con el archivo registrado.
-5. **¿Qué significa reused?** Que el archivo existe y su hash coincide, por lo que se reutiliza sin descargarlo otra vez.
-6. **¿Qué es idempotencia?** Repetir una ejecución con los mismos insumos deja el mismo resultado lógico sin duplicar filas.
-7. **¿Qué es RAW?** Es la copia original descargada, conservada inmutable para poder auditar el origen.
-8. **¿Qué es schema drift?** Es una diferencia entre las columnas/tipos reales y el contrato esperado.
-9. **¿Por qué cbd_congestion_fee es NULL en 2024?** La columna no estaba publicada en ese período y el contrato inyecta un NULL tipado permitido.
-10. **Diferencia entre esquema y calidad.** El esquema valida estructura y tipos; calidad valida reglas de contenido fila por fila.
-11. **¿Qué es cuarentena?** Es el Parquet de filas que tienen al menos una regla rechazante, separado del conjunto aceptado.
-12. **¿Qué es reconciliación?** Es comprobar que filas leídas = filas aceptadas + filas en cuarentena.
-13. **¿Por qué R05 y R08 son warnings?** Pasajeros inválidos o propinas negativas se señalan, pero no eliminan el viaje por sí solos.
-14. **¿Qué es Parquet?** Un formato columnar comprimido, adecuado para leer sólo las columnas necesarias.
-15. **¿Por qué no cargamos todo con pandas?** El volumen supera lo razonable para una notebook; DuckDB procesa por columnas y derrama a disco.
-16. **¿Qué es DuckDB?** Un motor SQL analítico embebido que ejecuta dentro del proceso Python.
-17. **¿Qué significa memory_limit=2GB?** Es el tope de memoria que DuckDB puede usar para sus operaciones.
-18. **¿Qué es spill to disk?** Es escribir temporales en data/tmp cuando una operación supera la memoria disponible.
-19. **¿Qué es un modelo estrella?** Un hecho central relacionado con dimensiones descriptivas.
-20. **¿Qué es fact_trips?** La tabla de hechos con un registro por viaje aceptado y sus medidas.
-21. **¿Qué es dim_zone?** La dimensión con identificador, borough, zona y service_zone del catálogo TLC.
-22. **¿Qué es dim_date?** La dimensión calendario derivada de las fechas de subida.
-23. **¿Qué es agg_zone_hour?** Un agregado por zona, fecha y hora con viajes, ingreso y duración media.
-24. **¿Qué es dbt?** Un framework declarativo que compila SQL/Jinja, materializa modelos y ejecuta tests de datos.
-25. **¿Qué diferencia hay entre staging, intermediate y marts?** Staging tipa fuentes, intermediate compone transformaciones y marts expone tablas analíticas.
-26. **¿Cuál es la diferencia entre dbt y DuckDB?** dbt organiza modelos y tests; DuckDB ejecuta el SQL y almacena el warehouse.
-27. **¿Qué es Dagster?** El orquestador que declara dependencias, lanza etapas y registra metadatos.
-28. **¿Qué diferencia hay entre Dagster y dbt?** Dagster coordina el pipeline completo; dbt modela y prueba la etapa SQL.
-29. **¿Por qué Dagster tiene 9 nodos?** Son cuatro etapas para cada uno de dos meses más un modelo compartido.
-30. **¿Qué es un log?** Un registro de lo que ocurrió durante una ejecución.
-31. **¿Qué es Docker?** Una forma de empaquetar código y dependencias en un entorno reproducible.
-32. **¿Dockerfile y docker-compose son lo mismo?** No: Dockerfile construye la imagen; Compose define cómo ejecutar el servicio y sus volúmenes.
-33. **¿Qué es GitHub Actions?** CI que ejecuta pip check, pytest y validaciones dbt en cada push o pull request, sin descargar datasets reales.
-34. **¿Qué prueban pytest y dbt test?** Pytest cubre contratos, reglas, integración y orquestación; dbt test cubre integridad de modelos y relaciones.
-35. **¿Por qué Q2 usa AVG y no SUM?** Busca el ingreso promedio por viaje para comparar horas con distinta cantidad de viajes.
-36. **¿Por qué Q1 usa LEFT JOIN?** Conserva zonas que aparecen en el período objetivo aunque no tengan viajes en el período comparado.
-37. **¿Por qué Q3 puede mostrar 100 % con un solo viaje?** Porque calcula una proporción; por eso siempre se debe mirar trips_in_zone.
-38. **¿Por qué Q4 no representa totalmente las propinas en efectivo?** La fuente TLC no registra de forma completa las propinas entregadas en mano.
-39. **¿Un viaje JFK → LaGuardia se cuenta dos veces en Q5?** No: la consulta cuenta filas de viajes, aunque el origen y destino cumplan ambos patrones.
-40. **¿Por qué Q6 no demuestra causalidad?** Dos meses permiten describir una diferencia, no controlar estacionalidad, oferta ni otros modos de transporte.
-41. **¿Qué limitaciones tiene el proyecto?** No hay validación física en una notebook de 8 GB, trip_id no es estable entre reconstrucciones y la interfaz Dagster no está expuesta por Docker.
-
----
 
 ## 21. Documentación Complementaria del Proyecto
 
