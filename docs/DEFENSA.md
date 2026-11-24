@@ -1,12 +1,19 @@
-# Guía de ejecución para la defensa
+# Comandos para la defensa — NYC Taxi
 
-Usar PowerShell desde la raíz del repositorio. Los comandos se pueden ejecutar con los archivos de `data/` ya descargados; la ingesta mostrará `reused` cuando el hash sea correcto.
+Hoja rápida para tener abierta durante la demostración. Ejecutar desde la raíz del repositorio en PowerShell.
 
-## 1. Preparar el entorno
+## Entorno
 
 ```powershell
-Set-Location "C:\ruta\al\proyecto\examen_Taxis"
+Get-Location
+Get-ChildItem
 .\.venv\Scripts\python.exe -m pip check
+```
+
+Salida esperada:
+
+```text
+No broken requirements found.
 ```
 
 Si no existe `.venv`:
@@ -16,87 +23,46 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-## 2. Ejecutar las pruebas
+## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Resultado de referencia: `37 passed`.
+Referencia: `37 passed`.
 
-Estas pruebas usan datos sintéticos o temporales y no reemplazan la ejecución con los Parquet oficiales.
-
-## 3. Ejecutar el pipeline
-
-### Modo Python
+## Pipeline Python
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06
 ```
 
-Procesa `2024-06` y `2025-06`. El warehouse es `data/warehouse/nyc_taxi.duckdb`.
+Procesa `2024-06` y `2025-06`. Warehouse: `data/warehouse/nyc_taxi.duckdb`.
 
-### Modo dbt
+## Pipeline dbt
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --modelo dbt
 ```
 
-Usa las mismas capas de datos y construye `data/warehouse/nyc_taxi_dbt.duckdb`.
+Warehouse: `data/warehouse/nyc_taxi_dbt.duckdb`.
 
-### Sólo hasta calidad
+## Sólo hasta calidad
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --hasta-calidad
 ```
 
-La ejecución termina después de ingesta, esquema, calidad y cuarentena.
-
-### Cambiar el período
+## Otro mes
 
 ```powershell
 # Procesa marzo de 2024 y marzo de 2025
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-03
 ```
 
-`--mes` siempre debe tener formato `YYYY-MM`.
+El valor de `--mes` debe tener formato `YYYY-MM`.
 
-## 4. Revisar los resultados
-
-Conteos de referencia para junio:
-
-| Período | Leídas | Aceptadas | Cuarentena |
-|---|---:|---:|---:|
-| 2024-06 | 3.539.193 | 3.441.465 | 97.728 |
-| 2025-06 | 4.322.960 | 4.052.233 | 270.727 |
-
-Archivos principales:
-
-- `data/reports/quality_YYYY-MM.json`
-- `data/validated/yellow/year=YYYY/month=MM/accepted.parquet`
-- `data/quarantine/yellow/year=YYYY/month=MM/rejected.parquet`
-- `data/curated/yellow/year=YYYY/month=MM/part-000.parquet`
-- `data/warehouse/nyc_taxi.duckdb`
-- `data/warehouse/nyc_taxi_dbt.duckdb`
-- `RESULTADOS.md`
-
-Para comprobar las tablas:
-
-```powershell
-@'
-import duckdb
-con = duckdb.connect("data/warehouse/nyc_taxi.duckdb", read_only=True)
-for table in ["dim_zone", "dim_date", "fact_trips", "agg_zone_hour"]:
-    print(table, con.execute("SELECT count(*) FROM " + table).fetchone()[0])
-print("trip_id_unicos", con.execute("SELECT count(*) = count(DISTINCT trip_id) FROM fact_trips").fetchone()[0])
-print("viajes_agregados", con.execute("SELECT sum(trips) FROM agg_zone_hour").fetchone()[0])
-con.close()
-'@ | .\.venv\Scripts\python.exe -
-```
-
-Valores esperados: `dim_zone=265`, `dim_date=60`, `fact_trips=7.493.698`, `trip_id_unicos=True` y `viajes_agregados=7.493.698`.
-
-## 5. Ejecutar dbt directamente
+## dbt directo
 
 ```powershell
 .\.venv\Scripts\dbt.exe debug --project-dir dbt_project --profiles-dir dbt_project
@@ -106,54 +72,288 @@ Valores esperados: `dim_zone=265`, `dim_date=60`, `fact_trips=7.493.698`, `trip_
 .\.venv\Scripts\dbt.exe test --project-dir dbt_project --profiles-dir dbt_project
 ```
 
-`build` construye modelos y ejecuta tests. La ejecución de referencia fue `32/32` tareas y `24/24` tests dbt.
+Referencias: `dbt build 32/32` y `dbt test 24/24`.
 
-## 6. Ejecutar Dagster
+## Dagster
 
 ```powershell
 .\.venv\Scripts\dagster.exe dev -m src.orchestration
 ```
 
-Abrir <http://127.0.0.1:3000>:
+Abrir <http://127.0.0.1:3000> y seleccionar:
 
-1. entrar en **Overview → Jobs**;
-2. seleccionar `pipeline_nyc_taxi`;
-3. abrir **Launchpad**;
-4. indicar `mes: "2025-06"` y `modelo: "python"` o ` "dbt"`;
-5. lanzar la ejecución y revisar **Runs**.
+```text
+Overview → Jobs → pipeline_nyc_taxi → Launchpad
+```
 
-El grafo tiene dos cadenas de cuatro etapas que terminan en `modelo_estrella`. Dagster coordina las funciones existentes; DuckDB ejecuta el procesamiento.
+Python:
 
-También se puede lanzar sin navegador:
+```yaml
+resources:
+  params:
+    config:
+      mes: "2025-06"
+      modelo: "python"
+```
+
+dbt:
+
+```yaml
+resources:
+  params:
+    config:
+      mes: "2025-06"
+      modelo: "dbt"
+```
+
+Detener con `Ctrl+C`.
+
+Sin interfaz:
 
 ```powershell
 .\.venv\Scripts\python.exe -c "from src.orchestration import run_job; print(run_job(mes='2025-06', modelo='python'))"
+.\.venv\Scripts\python.exe -c "from src.orchestration import run_job; print(run_job(mes='2025-06', modelo='dbt'))"
 ```
 
-Cerrar Dagster con `Ctrl+C`.
+## Comprobación de warehouses
 
-## 7. Ejecutar con Docker
+```powershell
+@'
+import duckdb
+
+for path in [
+    "data/warehouse/nyc_taxi.duckdb",
+    "data/warehouse/nyc_taxi_dbt.duckdb",
+]:
+    con = duckdb.connect(path, read_only=True)
+    print(path)
+    for table in ["dim_zone", "dim_date", "fact_trips", "agg_zone_hour"]:
+        count = con.execute(
+            "SELECT count(*) FROM " + table
+        ).fetchone()[0]
+        print(table, count)
+    print(
+        "trip_id_unicos",
+        con.execute(
+            "SELECT count(*) = count(DISTINCT trip_id) FROM fact_trips"
+        ).fetchone()[0],
+    )
+    print(
+        "viajes_agregados",
+        con.execute("SELECT sum(trips) FROM agg_zone_hour").fetchone()[0],
+    )
+    con.close()
+'@ | .\.venv\Scripts\python.exe -
+```
+
+Valores de junio:
+
+```text
+dim_zone       265
+dim_date       60
+fact_trips     7.493.698
+agg_zone_hour  210.698
+trip_id_unicos True
+viajes_agregados 7.493.698
+```
+
+## Conteos de calidad
+
+```powershell
+Get-Content data/reports/quality_2025-06.json
+Get-Content data/reports/quality_2024-06.json
+```
+
+Referencia 2025-06:
+
+```text
+leídas       4.322.960
+aceptadas    4.052.233
+cuarentena     270.727
+```
+
+Referencia 2024-06:
+
+```text
+leídas       3.539.193
+aceptadas    3.441.465
+cuarentena      97.728
+```
+
+Reconciliación: `leídas = aceptadas + cuarentena`.
+
+Fila de cuarentena:
+
+```powershell
+@'
+import duckdb
+con = duckdb.connect()
+rows = con.execute("""
+    SELECT tpep_pickup_datetime, tpep_dropoff_datetime,
+           trip_distance, total_amount, tip_amount,
+           source_file, violated_rules,
+           rejection_flags, warning_flags
+    FROM read_parquet(
+        'data/quarantine/yellow/year=2025/month=06/rejected.parquet',
+        hive_partitioning=false
+    )
+    WHERE len(rejection_flags) >= 2
+    LIMIT 3
+""").fetchall()
+for row in rows:
+    print(row)
+con.close()
+'@ | .\.venv\Scripts\python.exe -
+```
+
+## Resultados
+
+```powershell
+Get-Content RESULTADOS.md
+```
+
+Consultas disponibles: Q1 zonas, Q2 hora, Q3 cargo CBD, Q4 propinas, Q5 aeropuertos y Q6 variación mensual.
+
+Valores de referencia:
+
+```text
+Q1 — JFK Airport: 170.662 (2025) y 152.171 (2024)
+Q2 — 05:00: USD 32,57 promedio
+Q3 — 2.987.770 / 4.052.233 = 73,73 %
+Q4 — tarjeta: aproximadamente 25,26 %
+Q5 — 334.938 (2024) y 346.769 (2025)
+Q6 — viajes +17,75 %; tarifa media -0,1588
+```
+
+## Archivos para abrir
+
+```text
+README.md
+RESULTADOS.md
+src/pipeline.py
+src/ingest.py
+src/config.py
+src/orchestration.py
+src/dbt_runner.py
+dbt_project/models/
+contracts/yellow_schema.yaml
+data/reports/quality_2025-06.json
+data/warehouse/nyc_taxi.duckdb
+docs/RENDIMIENTO.md
+.github/workflows/tests.yml
+Dockerfile
+docker-compose.yml
+```
+
+## Docker
 
 ```powershell
 docker compose config
 docker compose build
 docker compose run --rm pipeline python -m pytest -q
 docker compose run --rm pipeline python -m src.pipeline --mes 2025-06 --modelo python
+docker compose run --rm pipeline python -m src.pipeline --mes 2025-06 --modelo dbt
+docker stats
+docker compose down --remove-orphans
 ```
 
-Docker es una alternativa al entorno virtual. Los datos se conservan en `./data` mediante un volumen y no se incluyen en la imagen.
+El volumen `./data:/app/data` conserva Parquet, reportes y warehouses. Límites configurados: DuckDB 2 GB, Compose 4 GB y 2 CPU.
 
-## 8. Respuestas breves
+No ejecutar dos procesos que escriban sobre `data/` al mismo tiempo.
 
-- **¿Qué hace la ingesta?** Descarga o reutiliza los archivos originales y registra su hash.
-- **¿Qué hace calidad?** Separa filas aceptadas y rechazadas, conserva las banderas y comprueba la reconciliación.
-- **¿Por qué Parquet?** Es columnar, tipado y eficiente para este volumen.
-- **¿Qué hace DuckDB?** Ejecuta SQL localmente sobre Parquet y limita memoria con spill a disco.
-- **¿Qué hace dbt?** Organiza modelos SQL, dependencias y tests; DuckDB sigue siendo el motor.
-- **¿Qué hace Dagster?** Ordena las etapas y registra el estado de cada una.
-- **¿Por qué hay dos warehouses?** Para ejecutar Python y dbt sin bloquear el mismo archivo.
-- **¿Por qué no se descargan datos en CI?** El workflow usa tests sintéticos y validaciones de dbt; los Parquet reales se prueban localmente.
-- **¿Qué significa idempotencia?** Repetir el comando reutiliza los raw y no duplica las filas curadas.
-- **¿Qué limitación queda?** `trip_id` es único por corrida, pero no es una clave estable entre reconstrucciones.
+## Memoria y rendimiento
 
-No ejecutar dos procesos simultáneos sobre la misma carpeta `data/`; DuckDB bloquea el warehouse durante la escritura.
+Docker, terminal 1:
+
+```powershell
+docker compose run --rm pipeline python -m src.pipeline --mes 2025-06 --modelo python
+```
+
+Docker, terminal 2:
+
+```powershell
+docker stats
+```
+
+Mediciones de referencia:
+
+```text
+Python local — 31,1–31,36 s; RAM ~2.023 MB
+dbt local    — 37,9–39,0 s; RAM ~2.001 MB
+Docker Python — 45,16 s; RAM 1,851 GiB
+Docker dbt   — 48,30–53,15 s; RAM 1,872 GiB
+```
+
+Las mediciones se realizaron en una máquina con 16 GB de RAM. No afirmar que se probó físicamente una notebook de exactamente 8 GB.
+
+## EXPLAIN ANALYZE
+
+```powershell
+@'
+from pathlib import Path
+import duckdb
+
+sql = Path("sql/q1_top_zones.sql").read_text(encoding="utf-8")
+con = duckdb.connect("data/warehouse/nyc_taxi.duckdb", read_only=True)
+for row in con.execute("EXPLAIN ANALYZE " + sql).fetchall():
+    print(*row)
+con.close()
+'@ | .\.venv\Scripts\python.exe -
+```
+
+Referencia documentada:
+
+```text
+Q1 ≈ 0,139 s
+Q6 ≈ 0,056 s
+```
+
+## CI
+
+Archivo:
+
+```text
+.github/workflows/tests.yml
+```
+
+Flujo:
+
+```text
+push / pull_request
+        ↓
+pip check
+        ↓
+pytest
+        ↓
+dbt parse
+        ↓
+dbt compile
+```
+
+La CI no descarga los Parquet grandes ni ejecuta `dbt build`.
+
+## Qué mostrar con cada herramienta
+
+| Evidencia | Comando o archivo |
+|---|---|
+| Tests Python | `python -m pytest -q` |
+| Grafo y estados | Dagster |
+| Resultados Q1–Q6 | `RESULTADOS.md` |
+| Conteos y relaciones | script DuckDB |
+| Calidad | `quality_YYYY-MM.json` |
+| Warehouse | `data/warehouse/*.duckdb` |
+| RAM y CPU | `docker stats` |
+| Plan SQL | `EXPLAIN ANALYZE` |
+| Modelos dbt | `dbt_project/models/` |
+| CI | `.github/workflows/tests.yml` |
+
+## Reglas durante la demostración
+
+```text
+1. Ejecutar desde la raíz del repositorio.
+2. Usar un solo proceso escritor sobre data/.
+3. No borrar data/raw/.
+4. Esperar el final de una ejecución antes de iniciar otra.
+5. Cerrar Dagster con Ctrl+C.
+6. Revisar RESULTADOS.md y los conteos después de una corrida.
+```
