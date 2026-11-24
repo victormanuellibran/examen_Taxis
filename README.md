@@ -28,10 +28,11 @@
 15. [Pruebas Automatizadas (`pytest` y `dbt test`)](#15-pruebas-automatizadas-pytest-y-dbt-test)
 16. [Rendimiento, Análisis `EXPLAIN ANALYZE` y Presupuesto de 8 GB de RAM](#16-rendimiento-análisis-explain-analyze-y-presupuesto-de-8-gb-de-ram)
 17. [Estructura Actual del Repositorio](#17-estructura-actual-del-repositorio)
-18. [Guía Operativa en PowerShell: Instalación, Modos de Ejecución y Meses Dinámicos](#18-guía-operativa-en-powershell-instalación-modos-de-ejecución-y-meses-dinámicos)
+18. [Guía Operativa Completa en PowerShell](#18-guía-operativa-completa-en-powershell)
 19. [Limitaciones Conocidas](#19-limitaciones-conocidas)
-20. [Documentación Complementaria del Proyecto](#20-documentación-complementaria-del-proyecto)
-21. [Declaración de Uso de Inteligencia Artificial (Codex y Antigravity)](#21-declaración-de-uso-de-inteligencia-artificial-codex-y-antigravity)
+20. [Preguntas técnicas frecuentes](#20-preguntas-técnicas-frecuentes)
+21. [Documentación Complementaria del Proyecto](#21-documentación-complementaria-del-proyecto)
+22. [Declaración de Uso de Inteligencia Artificial (Codex y Antigravity)](#22-declaración-de-uso-de-inteligencia-artificial-codex-y-antigravity)
 
 ---
 
@@ -618,132 +619,291 @@ examen_Taxis/
 
 ---
 
-## 18. Guía Operativa en PowerShell: Instalación, Modos de Ejecución y Meses Dinámicos
+## 18. Guía Operativa Completa en PowerShell
 
-### 18.1. Instalación desde cero (Entorno Local en Windows PowerShell)
+Todos los comandos de esta sección se ejecutan desde PowerShell independiente o desde la terminal integrada de Visual Studio Code. No se necesita GNU Make.
 
-```powershell
-git clone https://github.com/victormanuellibran/examen_Taxis.git
-Set-Location examen_Taxis
+### 18.1. Abrir el proyecto correctamente
+
+~~~powershell
+Get-Location
+Set-Location "RUTA\AL\PROYECTO\examen_Taxis"
+Get-ChildItem
+~~~
+
+La última orden debe mostrar, entre otras, las carpetas `src`, `data`, `sql`, `dbt_project` y `tests`.
+
+### 18.2. Comandos rápidos
+
+| Acción | Comando |
+|---|---|
+| Tests | `.\.venv\Scripts\python.exe -m pytest -q` |
+| Pipeline Python | `.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06` |
+| Pipeline dbt | `.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --modelo dbt` |
+| Dagster UI | `.\.venv\Scripts\dagster.exe dev -m src.orchestration` |
+| dbt debug | `.\.venv\Scripts\dbt.exe debug --project-dir dbt_project --profiles-dir dbt_project` |
+| dbt parse | `.\.venv\Scripts\dbt.exe parse --project-dir dbt_project --profiles-dir dbt_project` |
+| dbt compile | `.\.venv\Scripts\dbt.exe compile --project-dir dbt_project --profiles-dir dbt_project` |
+| Docker build | `docker compose build` |
+
+### 18.3. Crear el entorno virtual e instalar dependencias
+
+~~~powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-*(Si `python` invoca el alias de Microsoft Store, usar `py -3.12 -m venv .venv`).*
+.\.venv\Scripts\python.exe -m pip check
+~~~
 
-### 18.2. Ejecución de pruebas automatizadas (`pytest`)
+Si `python` no está disponible, usar `py -3.12 -m venv .venv`.
 
-```powershell
+### 18.4. Ejecutar tests
+
+La suite actual contiene **37 tests** en `tests/` y `tests/integration/`:
+
+~~~powershell
+.\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m pytest -v
-```
-Resultado esperado: **`37 passed`**.
+~~~
 
-### 18.3. Ejecución local del pipeline en modo Python (predeterminado)
+### 18.5. Pipeline tradicional con Python
 
-```powershell
-# Junio 2025 vs Junio 2024 (genera data/warehouse/nyc_taxi.duckdb y RESULTADOS.md)
+El modo predeterminado ejecuta ingesta, esquema, calidad, transformación y modelo estrella. `--mes 2025-06` deriva automáticamente `2024-06`:
+
+~~~powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06
+~~~
 
-# Ejecución parcial sólo hasta la etapa 3 (ingesta, esquema, calidad y reconciliación)
+La ejecución genera o reutiliza `data/raw/`, `data/staging/`, `data/validated/`, `data/quarantine/`, `data/curated/`, reportes JSON, `data/warehouse/nyc_taxi.duckdb` y `RESULTADOS.md`.
+
+Para detenerse después de ingesta, esquema y calidad:
+
+~~~powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --hasta-calidad
-```
+~~~
 
-### 18.4. Ejecución local del pipeline en modo dbt
+### 18.6. Cambiar el mes
 
-```powershell
-# Junio 2025 vs Junio 2024 con dbt build (genera data/warehouse/nyc_taxi_dbt.duckdb y RESULTADOS.md)
+Sólo se cambia el argumento --mes YYYY-MM. El archivo debe existir en NYC TLC; si no fue publicado, la ingesta informa un HTTP 404 como período no disponible.
+
+~~~powershell
+# Procesa marzo 2024 y marzo 2025
+.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-03
+
+# Procesa mayo 2024 y mayo 2025 con dbt
+.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-05 --modelo dbt
+~~~
+
+### 18.7. Pipeline con dbt
+
+~~~powershell
 .\.venv\Scripts\python.exe -m src.pipeline --mes 2025-06 --modelo dbt
+~~~
 
-# Comandos directos de dbt para inspección o defensa oral
+Python sigue ejecutando las etapas 1 a 4 y src/dbt_runner.py delega la etapa 5 en dbt build. DuckDB sigue siendo el motor SQL y el warehouse queda separado en data/warehouse/nyc_taxi_dbt.duckdb.
+
+~~~powershell
 .\.venv\Scripts\dbt.exe debug --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe parse --project-dir dbt_project --profiles-dir dbt_project
+.\.venv\Scripts\dbt.exe compile --project-dir dbt_project --profiles-dir dbt_project
 .\.venv\Scripts\dbt.exe build --project-dir dbt_project --profiles-dir dbt_project
 .\.venv\Scripts\dbt.exe test --project-dir dbt_project --profiles-dir dbt_project
-```
+~~~
 
-### 18.5. Ejecución mediante Docker y Docker Compose (sin GNU Make)
+debug valida perfiles, proyecto y conexión; parse valida el proyecto sin materializar modelos; compile genera el SQL compilado; build construye modelos y ejecuta tests; test ejecuta sólo tests declarativos. debug y compile necesitan que exista la ruta del warehouse configurada en profiles.yml.
 
-```powershell
-# 1. Validar configuración y construir la imagen
+### 18.8. Ejecución con Dagster
+
+Dagster organiza etapas, controla dependencias, registra logs y permite lanzar o relanzar el job. DuckDB procesa los datos y modelo: "dbt" continúa delegando el modelado en dbt.
+
+~~~powershell
+.\.venv\Scripts\python.exe -c "from src.orchestration import defs; print('Dagster OK')"
+.\.venv\Scripts\dagster.exe --version
+.\.venv\Scripts\dagster.exe dev -m src.orchestration
+~~~
+
+La interfaz se abre en http://127.0.0.1:3000. En Overview → Jobs → pipeline_nyc_taxi → Launchpad se puede usar mes 2025-06 y modelo python o dbt. El DAG tiene nueve nodos: dos cadenas de cuatro etapas que convergen en modelo_estrella.
+
+~~~yaml
+resources:
+  params:
+    config:
+      mes: "2025-06"
+      modelo: "python"
+~~~
+
+~~~yaml
+resources:
+  params:
+    config:
+      mes: "2025-06"
+      modelo: "dbt"
+~~~
+
+La ejecución usa in_process_executor para evitar dos escritores DuckDB simultáneos. En Runs se observan estado, etapas, filas y reglas; un log es un registro de lo que ocurrió.
+
+~~~powershell
+.\.venv\Scripts\python.exe -c "from src.orchestration import run_job; print(run_job(mes='2025-06', modelo='python'))"
+.\.venv\Scripts\python.exe -c "from src.orchestration import run_job; print(run_job(mes='2025-06', modelo='dbt'))"
+~~~
+
+### 18.9. Docker y Docker Compose
+
+Dockerfile es la receta de la imagen; Compose define la ejecución y volúmenes. Actualmente Docker no publica un servicio Dagster ni el puerto 3000, por lo que la interfaz Dagster se verifica sólo con .venv.
+
+~~~powershell
 docker compose config
 docker compose build
-
-# 2. Ejecutar los 37 tests de pytest y dbt debug dentro del contenedor
-docker compose run --rm pipeline python -m pytest -v
-docker compose run --rm pipeline dbt debug --project-dir /app/dbt_project --profiles-dir /app/dbt_project
-
-# 3. Ejecutar el pipeline completo en modo Python o en modo dbt
+docker compose run --rm pipeline python -m pytest -q
 docker compose run --rm pipeline python -m src.pipeline --mes 2025-06 --modelo python
 docker compose run --rm pipeline python -m src.pipeline --mes 2025-06 --modelo dbt
-
-# 4. Limpiar contenedores y red efímera conservando intactos los datos de ./data
 docker compose down --remove-orphans
-```
+~~~
 
-### 18.6. Selección dinámica de otros meses (`--mes YYYY-MM`)
+---
 
-Tanto en `.venv` como en Docker se puede indicar cualquier mes publicado por NYC TLC (por ejemplo, mayo `2025-05`, que procesa `2024-05` y `2025-05`):
+### 18.10. Cómo comprobar resultados y archivos generados
 
-```powershell
-# En entorno virtual local
-.\.venv\Scripts\python.exe -m src.pipeline --mes 2025-05 --modelo dbt
+En los logs del modo Python se busca Finalizó el pipeline completo; el modo dbt muestra el resumen de dbt build (en la ejecución de referencia: 32/32 tareas). Después se revisan:
 
-# O mediante Docker Compose
-docker compose run --rm pipeline python -m src.pipeline --mes 2025-05 --modelo dbt
-```
+- RESULTADOS.md: las seis consultas y sus interpretaciones.
+- data/reports/: reportes JSON de esquema y calidad.
+- data/curated/: Parquet enriquecidos por mes.
+- data/quarantine/: filas que violaron reglas rechazantes.
+- data/warehouse/: nyc_taxi.duckdb o nyc_taxi_dbt.duckdb según el motor.
 
-### 18.7. Verificación rápida de conteos e integridad de ambos warehouses
+Para comprobar conteos, unicidad de trip_id y reconciliación de agregados en ambos warehouses:
 
-```powershell
+~~~powershell
 @'
 import duckdb
 for name, path in [("python", "data/warehouse/nyc_taxi.duckdb"), ("dbt", "data/warehouse/nyc_taxi_dbt.duckdb")]:
     con = duckdb.connect(path, read_only=True)
     params = con.execute("SELECT * FROM analysis_parameters").fetchone()
-    counts = {t: con.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in ["dim_zone", "dim_date", "fact_trips", "agg_zone_hour"]}
+    counts = {t: con.execute("SELECT count(*) FROM " + t).fetchone()[0] for t in ["dim_zone", "dim_date", "fact_trips", "agg_zone_hour"]}
     uniq = con.execute("SELECT count(*) = count(DISTINCT trip_id) FROM fact_trips").fetchone()[0]
     agg_sum = con.execute("SELECT sum(trips) FROM agg_zone_hour").fetchone()[0]
-    print(f"[{name}] Periodos={params} | {counts} | trip_id_unico={uniq} | sum_agg_trips={agg_sum}")
+    print("[{}] Periodos={} | {} | trip_id_unico={} | sum_agg_trips={}".format(name, params, counts, uniq, agg_sum))
     con.close()
 '@ | .\.venv\Scripts\python.exe -
-```
+~~~
 
----
+### 18.11. Capas y archivos principales
+
+| Ruta | Función |
+|---|---|
+| src/ | Código de las cinco etapas, orquestador y runner dbt/Dagster |
+| data/ | Datos originales y procesados, excluidos de Git |
+| contracts/ | Contrato YAML del esquema |
+| sql/ | Seis consultas de negocio |
+| dbt_project/ | Modelos, fuentes, perfiles y tests dbt |
+| tests/ | Tests Python unitarios e integración |
+| docs/ | Documentación técnica |
+| .github/ | Workflow de GitHub Actions |
+| requirements.txt | Dependencias fijadas |
+| Dockerfile | Construcción de la imagen |
+| docker-compose.yml | Ejecución batch del contenedor |
+| RESULTADOS.md | Resultados analíticos generados |
+
+Las capas de datos son: raw (descarga original inmutable), staging (columnas normalizadas), validated y quarantine (salidas de calidad), curated (derivadas y zonas) y warehouse (modelo estrella y consultas).
+
+### 18.12. Las seis consultas, en una línea
+
+- **Q1:** top 10 zonas de origen y variación interanual.
+- **Q2:** hora con mayor ingreso promedio por viaje.
+- **Q3:** porcentaje de viajes con cbd_congestion_fee.
+- **Q4:** propina promedio como porcentaje de tarifa por tipo de pago.
+- **Q5:** viajes con origen o destino en JFK o LaGuardia.
+- **Q6:** comparación interanual de viajes y tarifa media.
+
+Los resultados de referencia de junio de 2025 se mantienen en RESULTADOS.md: 4.052.233 viajes aceptados en 2025-06, 3.441.465 en 2024-06, Q2 en la hora 5, Q3 global de 73,7314 % y Q6 de +17,7500 % viajes con -0,1588 de variación de tarifa media.
+
+### 18.13. Resolución de problemas
+
+- .venv\Scripts\python.exe no se reconoce: no se está en la raíz del proyecto o .venv todavía no existe. Volver a Set-Location y crear el entorno.
+- Puerto 3000 ocupado: cerrar la ejecución anterior de Dagster con Ctrl+C en su terminal; no iniciar dos interfaces para el mismo proyecto.
+- DuckDB file is locked: detener cualquier pipeline o job que escriba el mismo warehouse y ejecutar una sola corrida por directorio data/.
+- Mes no publicado: un HTTP 404 significa que NYC TLC todavía no publicó ese Parquet.
+- dbt falla por dependencias: reinstalar requirements.txt; sus pines de protobuf y grpcio-health-checking permiten convivir con Dagster y dbt.
 
 ## 19. Limitaciones Conocidas
 
-1. **Un único proceso escritor por warehouse:** DuckDB bloquea el archivo `.duckdb` durante la escritura. No deben correrse dos instancias simultáneas del pipeline escribiendo sobre el mismo directorio `data/`.
-2. **Estabilidad de `trip_id` entre reconstrucciones:** `fact_trips.trip_id` se genera en streaming mediante `row_number() OVER ()` (con `preserve_insertion_order=false`). Esto garantiza unicidad total (`100 %` de claves únicas y sin huérfanos) dentro de cada corrida sin agotar los 2 GB de RAM, pero el entero asignado a un viaje individual no constituye una clave natural persistente entre reconstrucciones si cambia el orden físico de lectura.
-3. **Lectura de porcentajes con denominador pequeño en Q3:** `q3_cbd_fee.sql` ordena por proporción (`pct_zone_with_cbd_fee DESC`) tal como pide el enunciado, por lo que una zona con un único viaje que pagó el cargo (`Rikers Island`, `1/1 = 100 %`) encabeza la lista antes de las zonas céntricas de Manhattan (~`99,8 %` con decenas de miles de viajes). Por ello la tabla expone explícitamente numerador y denominador (`trips_with_fee` y `trips_in_zone`).
-4. **Carácter descriptivo de Q6:** la variación interanual (`+17,75 %` en viajes aceptados y `-$0,16` en tarifa media en junio) se calcula sobre viajes que superaron las reglas de calidad y no permite inferir causalidad directa de una política pública a partir de dos cortes mensuales. Por eso [`RESULTADOS.md`](RESULTADOS.md) formula la causa (Flex Fare, viajes cortos y peaje CBD) explícitamente como hipótesis a contrastar.
-5. **Hardware de medición de RAM:** los límites de `2 GB` en DuckDB y `4 GiB` en Docker fueron verificados empíricamente (~`1,85–2,02 GB` observados), pero en una PC anfitriona de 16 GB; queda pendiente una corrida en una notebook física de 8 GB (donde con Docker Desktop debe sumarse el consumo de WSL 2).
-6. **Ausencia de propinas en efectivo en la fuente TLC:** en `payment_type = 2` (efectivo), `tip_amount` es cercano a `0 %` porque el sistema oficial de taxímetros no registra propinas abonadas en mano.
+1. **Un único proceso escritor por warehouse:** DuckDB bloquea el archivo .duckdb durante la escritura. No deben correrse dos instancias simultáneas del pipeline sobre el mismo directorio data/.
+2. **Estabilidad de trip_id entre reconstrucciones:** fact_trips.trip_id se genera con row_number() OVER (); es único dentro de cada corrida, pero no es una clave natural persistente si cambia el orden físico de lectura.
+3. **Q3 y denominadores pequeños:** q3_cbd_fee.sql ordena por proporción; una zona con un solo viaje puede mostrar 100 %. La tabla expone también numerador y denominador.
+4. **Q6 es descriptiva:** la variación interanual se calcula sobre dos cortes mensuales y formula una hipótesis, no una conclusión causal.
+5. **Hardware:** el presupuesto de DuckDB se verificó con mediciones de aproximadamente 2 GB en una máquina de 16 GB; falta una corrida física en una notebook de exactamente 8 GB.
+6. **Propinas en efectivo:** para payment_type = 2, tip_amount no registra completamente las propinas abonadas en mano.
 
 ---
 
-## 20. Documentación Complementaria del Proyecto
+## 20. Preguntas técnicas frecuentes
 
-- [`RESULTADOS.md`](RESULTADOS.md): consultas SQL ejecutadas, tablas de resultados e interpretaciones para las 6 preguntas de negocio.
-- [`AGENTS.md`](AGENTS.md): acuerdos de integración, ramas y contratos de funciones entre módulos.
-- [`contracts/yellow_schema.yaml`](contracts/yellow_schema.yaml): contrato versionado de esquema v1 (20 columnas y políticas de evolución).
-- [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md): explicación detallada de las dos arquitecturas implementadas (Python y Python + dbt), infraestructura Docker Compose y automatización con GitHub Actions.
-- [`docs/DAGSTER.md`](docs/DAGSTER.md): orquestación con Dagster — DAG de nueve nodos, configuración de períodos y motor, integración con dbt, restricción de 8 GB, pruebas y guía de demostración.
-- [`docs/DEFENSA.md`](docs/DEFENSA.md): protocolo de demostración corta en vivo, guion de exposición oral para ambos integrantes y banco de preguntas técnicas con respuestas.
-- [`docs/DOCKER.md`](docs/DOCKER.md): guía conceptual y práctica de imagen, contenedor, Docker Compose, volúmenes y memoria.
-- [`docs/CI.md`](docs/CI.md): alcance, pasos y verificación del workflow de GitHub Actions.
-- [`docs/AUDITORIA_TECNICA.md`](docs/AUDITORIA_TECNICA.md): auditoría de las consultas Q1–Q6, corrección de clave de zona en Q1 y análisis de estabilidad de `trip_id`.
-- [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md): mediciones de tiempos, tamaños de warehouses y planes `EXPLAIN ANALYZE` de Q1 y Q6.
-- [`docs/decisiones_parte_a.md`](docs/decisiones_parte_a.md): justificación detallada de ingesta, contrato de esquema y reglas de calidad `R01`–`R08`.
-- [`docs/verificacion_parte_a.md`](docs/verificacion_parte_a.md): evidencia de ejecución de la Parte A y hashes SHA-256.
-- [`docs/revision_integracion.md`](docs/revision_integracion.md): informe de la auditoría de integración inicial y pruebas agregadas.
-- [`docs/informe_pruebas_final.md`](docs/informe_pruebas_final.md): guía paso a paso de verificación y resolución de problemas en PowerShell.
+1. **¿Qué es un pipeline?** Es una secuencia reproducible de etapas que transforma datos desde la fuente hasta resultados analíticos.
+2. **¿Por qué es batch?** Procesa archivos completos por período y termina; no mantiene un proceso permanente de eventos.
+3. **¿Qué es streaming en la descarga?** La respuesta HTTP se escribe por bloques en disco, sin cargar todo el Parquet en RAM.
+4. **¿Qué es SHA-256?** Es un hash que permite comprobar que un archivo local coincide con el archivo registrado.
+5. **¿Qué significa reused?** Que el archivo existe y su hash coincide, por lo que se reutiliza sin descargarlo otra vez.
+6. **¿Qué es idempotencia?** Repetir una ejecución con los mismos insumos deja el mismo resultado lógico sin duplicar filas.
+7. **¿Qué es RAW?** Es la copia original descargada, conservada inmutable para poder auditar el origen.
+8. **¿Qué es schema drift?** Es una diferencia entre las columnas/tipos reales y el contrato esperado.
+9. **¿Por qué cbd_congestion_fee es NULL en 2024?** La columna no estaba publicada en ese período y el contrato inyecta un NULL tipado permitido.
+10. **Diferencia entre esquema y calidad.** El esquema valida estructura y tipos; calidad valida reglas de contenido fila por fila.
+11. **¿Qué es cuarentena?** Es el Parquet de filas que tienen al menos una regla rechazante, separado del conjunto aceptado.
+12. **¿Qué es reconciliación?** Es comprobar que filas leídas = filas aceptadas + filas en cuarentena.
+13. **¿Por qué R05 y R08 son warnings?** Pasajeros inválidos o propinas negativas se señalan, pero no eliminan el viaje por sí solos.
+14. **¿Qué es Parquet?** Un formato columnar comprimido, adecuado para leer sólo las columnas necesarias.
+15. **¿Por qué no cargamos todo con pandas?** El volumen supera lo razonable para una notebook; DuckDB procesa por columnas y derrama a disco.
+16. **¿Qué es DuckDB?** Un motor SQL analítico embebido que ejecuta dentro del proceso Python.
+17. **¿Qué significa memory_limit=2GB?** Es el tope de memoria que DuckDB puede usar para sus operaciones.
+18. **¿Qué es spill to disk?** Es escribir temporales en data/tmp cuando una operación supera la memoria disponible.
+19. **¿Qué es un modelo estrella?** Un hecho central relacionado con dimensiones descriptivas.
+20. **¿Qué es fact_trips?** La tabla de hechos con un registro por viaje aceptado y sus medidas.
+21. **¿Qué es dim_zone?** La dimensión con identificador, borough, zona y service_zone del catálogo TLC.
+22. **¿Qué es dim_date?** La dimensión calendario derivada de las fechas de subida.
+23. **¿Qué es agg_zone_hour?** Un agregado por zona, fecha y hora con viajes, ingreso y duración media.
+24. **¿Qué es dbt?** Un framework declarativo que compila SQL/Jinja, materializa modelos y ejecuta tests de datos.
+25. **¿Qué diferencia hay entre staging, intermediate y marts?** Staging tipa fuentes, intermediate compone transformaciones y marts expone tablas analíticas.
+26. **¿Cuál es la diferencia entre dbt y DuckDB?** dbt organiza modelos y tests; DuckDB ejecuta el SQL y almacena el warehouse.
+27. **¿Qué es Dagster?** El orquestador que declara dependencias, lanza etapas y registra metadatos.
+28. **¿Qué diferencia hay entre Dagster y dbt?** Dagster coordina el pipeline completo; dbt modela y prueba la etapa SQL.
+29. **¿Por qué Dagster tiene 9 nodos?** Son cuatro etapas para cada uno de dos meses más un modelo compartido.
+30. **¿Qué es un log?** Un registro de lo que ocurrió durante una ejecución.
+31. **¿Qué es Docker?** Una forma de empaquetar código y dependencias en un entorno reproducible.
+32. **¿Dockerfile y docker-compose son lo mismo?** No: Dockerfile construye la imagen; Compose define cómo ejecutar el servicio y sus volúmenes.
+33. **¿Qué es GitHub Actions?** CI que ejecuta pip check, pytest y validaciones dbt en cada push o pull request, sin descargar datasets reales.
+34. **¿Qué prueban pytest y dbt test?** Pytest cubre contratos, reglas, integración y orquestación; dbt test cubre integridad de modelos y relaciones.
+35. **¿Por qué Q2 usa AVG y no SUM?** Busca el ingreso promedio por viaje para comparar horas con distinta cantidad de viajes.
+36. **¿Por qué Q1 usa LEFT JOIN?** Conserva zonas que aparecen en el período objetivo aunque no tengan viajes en el período comparado.
+37. **¿Por qué Q3 puede mostrar 100 % con un solo viaje?** Porque calcula una proporción; por eso siempre se debe mirar trips_in_zone.
+38. **¿Por qué Q4 no representa totalmente las propinas en efectivo?** La fuente TLC no registra de forma completa las propinas entregadas en mano.
+39. **¿Un viaje JFK → LaGuardia se cuenta dos veces en Q5?** No: la consulta cuenta filas de viajes, aunque el origen y destino cumplan ambos patrones.
+40. **¿Por qué Q6 no demuestra causalidad?** Dos meses permiten describir una diferencia, no controlar estacionalidad, oferta ni otros modos de transporte.
+41. **¿Qué limitaciones tiene el proyecto?** No hay validación física en una notebook de 8 GB, trip_id no es estable entre reconstrucciones y la interfaz Dagster no está expuesta por Docker.
 
 ---
 
-## 21. Declaración de Uso de Inteligencia Artificial (Codex y Antigravity)
+## 21. Documentación Complementaria del Proyecto
+
+- [RESULTADOS.md](RESULTADOS.md): consultas SQL ejecutadas, tablas de resultados e interpretaciones para las 6 preguntas de negocio.
+- [AGENTS.md](AGENTS.md): acuerdos de integración, ramas y contratos de funciones entre módulos.
+- [contracts/yellow_schema.yaml](contracts/yellow_schema.yaml): contrato versionado de esquema v1.
+- [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md): arquitecturas Python/dbt, Docker Compose y GitHub Actions.
+- [docs/DAGSTER.md](docs/DAGSTER.md): DAG de nueve nodos, configuración, integración con dbt y pruebas.
+- [docs/DEFENSA.md](docs/DEFENSA.md): demostración técnica y respuestas de apoyo.
+- [docs/DOCKER.md](docs/DOCKER.md): imagen, contenedor, Compose, volúmenes y memoria.
+- [docs/CI.md](docs/CI.md): alcance y verificación del workflow de GitHub Actions.
+- [docs/AUDITORIA_TECNICA.md](docs/AUDITORIA_TECNICA.md): auditoría de Q1–Q6, trip_id y relaciones.
+- [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md): tiempos, tamaños de warehouses y planes EXPLAIN ANALYZE.
+- [docs/informe_pruebas_final.md](docs/informe_pruebas_final.md): verificación y resolución de problemas en PowerShell.
+
+---
+
+## 22. Declaración de Uso de Inteligencia Artificial (Codex y Antigravity)
 
 En cumplimiento de las normas académicas de la cátedra, se declara de forma veraz el uso de herramientas de Inteligencia Artificial como asistentes de ingeniería durante el desarrollo:
 
-- **OpenAI Codex:** utilizado como asistente para la codificación modular de las etapas de ingesta, validación de esquema, calidad, transformación y modelo en Python, la implementación del proyecto `dbt_project/` y el selector `--modelo dbt`, la parametrización dinámica de meses, el workflow de GitHub Actions y la auditoría técnica de planes SQL (`EXPLAIN ANALYZE`).
-- **Google Antigravity (Gemini):** utilizado para la auditoría de integración entre ramas (`qa/integracion`), el desarrollo de pruebas de integración extremo a extremo ([`tests/integration/`](tests/integration/)), la detección y corrección del filtro de `LaGuardia Airport` en [`sql/q5_airports.sql`](sql/q5_airports.sql) y de la generación en streaming de `fact_trips`, la dockerización del pipeline ([`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml), [`docs/DOCKER.md`](docs/DOCKER.md)) y la consolidación de la documentación técnica final.
-- **Claude (Anthropic):** utilizado para la integración de Dagster como orquestador declarativo ([`src/orchestration.py`](src/orchestration.py), [`tests/test_orchestration.py`](tests/test_orchestration.py), [`docs/DAGSTER.md`](docs/DAGSTER.md)), la resolución de conflictos de dependencias entre Dagster y dbt (`protobuf`/`grpcio-health-checking`) y la corrección de la hipótesis de causa en Q6 ([`src/results.py`](src/results.py)).
+- **OpenAI Codex:** utilizado como asistente para la codificación modular de las etapas, dbt_project/, parametrización de meses, GitHub Actions y auditoría SQL.
+- **Google Antigravity (Gemini):** utilizado para auditoría de integración, pruebas de integración, correcciones SQL, dockerización y consolidación documental.
+- **Claude (Anthropic):** utilizado para la integración de Dagster, la resolución de dependencias entre Dagster y dbt y la hipótesis documentada de Q6.
 
-Todas las decisiones de arquitectura, umbrales de calidad, consultas SQL y métricas de rendimiento fueron verificadas sobre los datos oficiales de NYC TLC y son comprendidas en su totalidad por los integrantes para su defensa oral.
+Todas las decisiones de arquitectura, umbrales de calidad, consultas SQL y métricas de rendimiento fueron verificadas sobre los datos oficiales de NYC TLC y son comprendidas por los integrantes.
