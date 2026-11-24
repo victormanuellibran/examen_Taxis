@@ -814,7 +814,15 @@ Las capas de datos son: raw (descarga original inmutable), staging (columnas nor
 - **Q4:** propina promedio como porcentaje de tarifa por tipo de pago.
 - **Q5:** viajes con origen o destino en JFK o LaGuardia.
 - **Q6:** comparación interanual de viajes y tarifa media.
+1Top zonas: muestra qué zonas tuvieron más viajes y cómo variaron respecto al año anterior.
 
+2Hora con mayor ingreso promedio: busca a qué hora del día cada viaje genera más dinero en promedio.
+
+3Cargo CBD: calcula qué porcentaje de viajes tuvo el recargo por congestión y en qué zonas aparece más.
+
+4Propinas por tipo de pago: compara cuánto se deja de propina según la forma de pago.
+
+5Aeropuertos: compara cantidad de viajes y tarifa promedio de viajes relacionados con JFK o LaGuardia.
 Los resultados de referencia de junio de 2025 se mantienen en RESULTADOS.md: 4.052.233 viajes aceptados en 2025-06, 3.441.465 en 2024-06, Q2 en la hora 5, Q3 global de 73,7314 % y Q6 de +17,7500 % viajes con -0,1588 de variación de tarifa media.
 
 ### 18.13. Resolución de problemas
