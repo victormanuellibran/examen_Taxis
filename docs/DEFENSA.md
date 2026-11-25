@@ -336,6 +336,8 @@ La CI no descarga los Parquet grandes ni ejecuta `dbt build`.
 
 Orden recomendado para la demo, con dos terminales abiertas en la raíz del repo.
 
+> Si Windows PowerShell responde *"la ejecución de scripts está deshabilitada"*, reemplazar `.\run.ps1` por `.\run.cmd` en todos los comandos (mismos argumentos).
+
 **Terminal 1.** Levanta Prometheus y Grafana, y abre Grafana en el navegador:
 
 ```powershell
