@@ -27,7 +27,7 @@ Desde la raíz del proyecto:
 Resultado esperado:
 
 - `No broken requirements found`.
-- `37 passed`.
+- `40 passed`.
 - dbt termina con código `0`.
 
 ## Revisar una ejecución en GitHub

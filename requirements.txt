@@ -7,6 +7,9 @@ dbt-core==1.12.7
 dbt-duckdb==1.11.1
 dagster==1.13.31
 dagster-webserver==1.13.31
+# Métricas en vivo (src/metrics.py) para Prometheus/Grafana.
+prometheus-client==0.26.0
+psutil==7.2.2
 # Dagster arrastra protobuf 7.x y grpcio-health-checking 1.85, incompatibles con
 # dbt-common/dbt-adapters, que exigen protobuf <7. Estos dos pines son los que
 # permiten que Dagster y dbt convivan en el mismo entorno (`pip check` limpio).

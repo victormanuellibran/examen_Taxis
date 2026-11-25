@@ -112,3 +112,35 @@ def run_model(months: list[str]) -> None:
     """Construye el modelo dbt y ejecuta las seis consultas del examen."""
     _run_dbt_build(months)
     _write_business_results(months)
+
+
+def docs(mes: str = "2025-06", serve: bool = False, port: int = 8081) -> int:
+    """Genera la documentación de dbt (catálogo + grafo de linaje) y opcionalmente la sirve.
+
+    Requiere haber corrido antes el pipeline con ``--modelo dbt`` para que exista el warehouse.
+    No modifica datos: ``dbt docs generate`` sólo lee metadatos del warehouse.
+    """
+    year, month = parse_month(mes)
+    months = [f"{year - 1:04d}-{month:02d}", mes]
+    base = [sys.executable, "-m", "dbt.cli.main", "docs"]
+    common = ["--project-dir", str(DBT_PROJECT_DIR), "--profiles-dir", str(DBT_PROJECT_DIR)]
+    generate = base + ["generate", *common, "--vars", json.dumps(_dbt_vars(months), separators=(",", ":"))]
+    code = subprocess.run(generate, cwd=ROOT, env=_dbt_environment(), check=False).returncode
+    if code or not serve:
+        return code
+    LOG.info("Documentación dbt en http://localhost:%s (Ctrl+C para cerrar)", port)
+    serve_cmd = base + ["serve", *common, "--port", str(port)]
+    return subprocess.run(serve_cmd, cwd=ROOT, env=_dbt_environment(), check=False).returncode
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Utilidades dbt: documentación y linaje")
+    parser.add_argument("accion", choices=["docs"])
+    parser.add_argument("--mes", default="2025-06")
+    parser.add_argument("--serve", action="store_true", help="Además de generar, abrir el sitio en el navegador")
+    parser.add_argument("--port", type=int, default=8081)
+    cli = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    raise SystemExit(docs(cli.mes, cli.serve, cli.port))

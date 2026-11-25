@@ -1,0 +1,14 @@
+# Prometheus junta las métricas que publica el pipeline (src/metrics.py) cada segundo.
+global:
+  scrape_interval: 1s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: nyc_taxi_pipeline
+    static_configs:
+      # Pipeline corriendo en Windows (terminal o Dagster) con NYC_TAXI_METRICS_PORT=9108.
+      - targets: ["host.docker.internal:9108"]
+        labels: {modo: local}
+      # Pipeline corriendo dentro de Docker (servicio "pipeline" del docker-compose).
+      - targets: ["pipeline:9108"]
+        labels: {modo: docker}

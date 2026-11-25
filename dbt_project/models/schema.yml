@@ -1,23 +1,36 @@
 version: 2
 
+# Las descripciones alimentan `dbt docs` (catálogo y grafo de linaje): .\run.ps1 dbt-docs
+
 models:
   - name: stg_yellow_trips
-    description: "Union tipada de los viajes aceptados de junio 2024 y junio 2025."
+    description: "Staging: unión tipada de los viajes aceptados por la etapa de calidad (mes comparado + mes asignado)."
     columns:
       - name: source_file
+        description: "Archivo TLC de origen; permite rastrear cada viaje hasta el raw."
         data_tests: [not_null]
       - name: warning_flags
+        description: "Reglas de advertencia (R05, R08) que marcó la calidad sin descartar la fila."
         data_tests: [not_null]
+
   - name: stg_taxi_zones
+    description: "Staging: catálogo oficial de 265 zonas TLC (taxi_zone_lookup.csv)."
     columns:
       - name: zone_id
+        description: "LocationID de la TLC."
         data_tests: [not_null, unique]
+
+  - name: int_trips_enriched
+    description: "Intermedio: viajes de la capa curada con columnas derivadas y barrio/zona de origen y destino."
+
   - name: fact_trips
-    description: "Hecho granular: una fila por viaje aceptado."
+    description: "Hecho granular: una fila por viaje aceptado de los dos meses analizados."
     columns:
       - name: trip_id
+        description: "Clave sustituta (row_number) única dentro de cada construcción."
         data_tests: [not_null, unique]
       - name: date_key
+        description: "Fecha de subida AAAAMMDD; FK a dim_date."
         data_tests:
           - not_null
           - relationships:
@@ -25,6 +38,7 @@ models:
                 to: ref('dim_date')
                 field: date_key
       - name: pickup_zone_id
+        description: "Zona de origen; FK a dim_zone."
         data_tests:
           - not_null
           - relationships:
@@ -32,21 +46,48 @@ models:
                 to: ref('dim_zone')
                 field: zone_id
       - name: dropoff_zone_id
+        description: "Zona de destino; FK a dim_zone."
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('dim_zone')
                 field: zone_id
+      - name: pickup_hour
+        description: "Hora de subida (0-23)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+                quote: false
+      - name: payment_type
+        description: "Diccionario TLC: 0 Flex Fare, 1 tarjeta, 2 efectivo, 3 sin cargo, 4 disputa, 5 desconocido, 6 anulado."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6]
+                quote: false
+      - name: tip_pct_fare
+        description: "Propina como % de fare_amount; sólo interpretable para tarjeta."
+      - name: cbd_congestion_fee
+        description: "Cargo de congestión CBD (desde enero 2025). En 2024 vale 0 porque el cargo no existía."
+
   - name: dim_zone
+    description: "Dimensión de zonas: una fila por LocationID con barrio, nombre y service_zone."
     columns:
       - name: zone_id
+        description: "LocationID de la TLC."
         data_tests: [not_null, unique]
+
   - name: dim_date
+    description: "Dimensión de fechas: una fila por fecha de subida presente en los viajes."
     columns:
       - name: date_key
+        description: "Fecha AAAAMMDD."
         data_tests: [not_null, unique]
+
   - name: agg_zone_hour
+    description: "Agregado: viajes, ingreso total y duración media por zona de origen, fecha y hora."
     columns:
       - name: pickup_zone_id
         data_tests: [not_null]
@@ -54,7 +95,9 @@ models:
         data_tests: [not_null]
       - name: pickup_hour
         data_tests: [not_null]
+
   - name: analysis_parameters
+    description: "Una fila con el mes comparado y el mes asignado; las consultas SQL la usan para no tener meses fijos."
     columns:
       - name: comparison_month
         data_tests: [not_null]

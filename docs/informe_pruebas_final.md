@@ -30,7 +30,7 @@ Si `.venv` ya existe, sólo ejecutar `pip check`.
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Resultado esperado: `37 passed`.
+Resultado esperado: `40 passed`.
 
 ## 4. Ejecutar el pipeline completo
 
@@ -124,7 +124,7 @@ Volver a ejecutar el mismo comando. Los archivos raw deben mostrar `reused` y lo
 
 La última verificación local de la rama de documentación produjo:
 
-- `37 passed` en pytest.
+- `40 passed` en pytest.
 - `pip check` sin errores.
 - `dbt parse` y `dbt compile` correctos.
 - Importación de Dagster correcta.

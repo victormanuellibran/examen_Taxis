@@ -30,9 +30,9 @@
 17. [Estructura Actual del Repositorio](#17-estructura-actual-del-repositorio)
 18. [Guía Operativa Completa en PowerShell](#18-guía-operativa-completa-en-powershell)
 19. [Limitaciones Conocidas](#19-limitaciones-conocidas)
-20. [Preguntas técnicas frecuentes](#20-preguntas-técnicas-frecuentes)
+20. [Dashboard, Monitoreo en Tiempo Real e Insights](#20-dashboard-monitoreo-en-tiempo-real-e-insights)
 21. [Documentación Complementaria del Proyecto](#21-documentación-complementaria-del-proyecto)
-22. [Declaración de Uso de Inteligencia Artificial (Codex y Antigravity)](#22-declaración-de-uso-de-inteligencia-artificial-codex-y-antigravity)
+22. [Declaración de Uso de Inteligencia Artificial (Codex, Antigravity y Claude)](#22-declaración-de-uso-de-inteligencia-artificial-codex-antigravity-y-claude)
 
 ---
 
@@ -52,7 +52,8 @@ Construir un **pipeline batch reproducible, idempotente y trazable** que ejecute
 - **Dos motores de modelado excluyentes e integrados:** `--modelo python` (predeterminado, en `data/warehouse/nyc_taxi.duckdb`) y `--modelo dbt` (`dbt-core` + `dbt-duckdb`, en `data/warehouse/nyc_taxi_dbt.duckdb`), que producen conteos y respuestas equivalentes para las seis consultas.
 - **Doble modalidad de ejecución:** local nativa mediante entorno virtual `.venv` y contenedorizada mediante **Docker / Docker Compose**.
 - **Orquestación con Dagster:** capa opcional de orquestación declarativa ([`src/orchestration.py`](src/orchestration.py)) que expone el pipeline como un DAG de nueve nodos con observabilidad por etapa y reejecución parcial desde interfaz web (`dagster dev -m src.orchestration`).
-- **Verificación automatizada:** **37 tests en `pytest`**, **24 data tests en `dbt`** (`32/32` tareas en `dbt build`) y validación continua configurada en **GitHub Actions**.
+- **Capas de observación opcionales (no cambian resultados):** dashboard de resultados en **Streamlit**, monitoreo de RAM/CPU/etapas en tiempo real con **Prometheus + Grafana** y siete consultas de *insights* con su análisis (ver [sección 20](#20-dashboard-monitoreo-en-tiempo-real-e-insights)).
+- **Verificación automatizada:** **40 tests en `pytest`**, **27 data tests en `dbt`** (`35/35` tareas en `dbt build`) y validación continua configurada en **GitHub Actions**.
 
 ---
 
@@ -123,7 +124,7 @@ flowchart TD
     subgraph E5["Etapa 5: Modelo Estrella y Consultas SQL"]
         MODELO["Selector de motor\n--modelo python | dbt"]
         DW["Warehouse Modo Python\ndata/warehouse/nyc_taxi.duckdb\ndim_zone · dim_date · fact_trips · agg_zone_hour"]
-        DBT["Warehouse Modo dbt\ndata/warehouse/nyc_taxi_dbt.duckdb\nmodels/staging · intermediate · marts (32/32 PASS)"]
+        DBT["Warehouse Modo dbt\ndata/warehouse/nyc_taxi_dbt.duckdb\nmodels/staging · intermediate · marts (35/35 PASS)"]
         RES["Reporte Analítico\nRESULTADOS.md\n(Consultas sql/q1..q6.sql)"]
     end
 
@@ -142,7 +143,7 @@ flowchart TD
     E4 --> CUR
     CUR --> MODELO
     MODELO -->|"src/model.py"| DW
-    MODELO -->|"src/dbt_runner.py\ndbt build (8 modelos + 24 tests)"| DBT
+    MODELO -->|"src/dbt_runner.py\ndbt build (8 modelos + 27 tests)"| DBT
     RAW -->|"Catálogo de zonas"| DW
     RAW -->|"Catálogo de zonas"| DBT
     DW -->|"sql/q1..q6.sql + src/results.py"| RES
@@ -180,7 +181,7 @@ flowchart LR
     end
 
     subgraph QA_CI["Calidad de Software y CI"]
-        PYT["Suite pytest (37 tests)\ntests/ + tests/integration/"]
+        PYT["Suite pytest (40 tests)\ntests/ + tests/integration/"]
         GHA["GitHub Actions (.github/workflows/tests.yml)\npip check + pytest + dbt parse/compile"]
     end
 
@@ -243,13 +244,18 @@ Todas las dependencias se encuentran fijadas en [`requirements.txt`](requirement
 | **Python** | `3.10+` (`3.12.16`) | Orquestación modular, descargas HTTP en streaming, control SHA-256, invocación de dbt y formateo de reportes. |
 | **DuckDB** | `1.4.3` | Motor SQL analítico columnar *in-process*. Consulta y escribe Parquet directamente en C++ sin pasar filas por Python, con techo estricto de memoria (`memory_limit='2GB'`) y derrame a disco (`data/tmp`). |
 | **Apache Parquet + PyArrow** | `22.0.0` | Almacenamiento columnar comprimido (`ZSTD`) particionado por `year` y `month`. PyArrow valida metadatos (`num_rows`) en la descarga y genera fixtures sintéticos en los tests. |
-| **dbt-core + dbt-duckdb** | `1.12.7` / `1.11.1` | Modelado dimensional declarativo (`staging`, `intermediate`, `marts`) con linaje explícito (`source()`, `ref()`) y 24 pruebas de integridad (`dbt build` / `dbt test`). |
+| **dbt-core + dbt-duckdb** | `1.12.7` / `1.11.1` | Modelado dimensional declarativo (`staging`, `intermediate`, `marts`) con linaje explícito (`source()`, `ref()`) y 27 pruebas de integridad (`dbt build` / `dbt test`). |
 | **PyYAML** | `6.0.3` | Lectura del contrato de esquema versionado [`contracts/yellow_schema.yaml`](contracts/yellow_schema.yaml). |
 | **Requests** | `2.32.5` | Descarga HTTP en streaming de bloques de 1 MiB con *timeouts* `(15, 120)` s y reintentos exponenciales. |
-| **pytest** | `9.0.2` | Suite de 37 pruebas unitarias, de integración y de orquestación sobre datos sintéticos sin dependencia de Internet. |
+| **pytest** | `9.0.2` | Suite de 40 pruebas unitarias, de integración y de orquestación sobre datos sintéticos sin dependencia de Internet. |
 | **Docker + Docker Compose** | Engine `29.x` / Compose `v5` | Empaquetado reproducible del entorno Linux (`python:3.12-slim` + `git` + `requirements.txt`) con volumen persistente `./data:/app/data` y límite `mem_limit: 4g`. |
 | **GitHub Actions** | `ubuntu-latest` (Python `3.12`) | Integración continua liviana (`.github/workflows/tests.yml`): `pip check`, `pytest -q`, `dbt parse` y `dbt compile`. |
 | **Dagster** | `1.13.31` | Orquestador declarativo de pipelines. Define un DAG de nueve nodos (dos cadenas de cuatro etapas convergiendo en el modelo estrella), registra metadatos por etapa (filas leídas, aceptadas, en cuarentena) y ofrece interfaz web (`dagster dev`) para observar, lanzar y relanzar ejecuciones. Documentado en [`docs/DAGSTER.md`](docs/DAGSTER.md). |
+| **Streamlit** | `1.67.0` | Dashboard de resultados en Python ([`dashboard/app.py`](dashboard/app.py)): reutiliza las consultas de `sql/`, abre el warehouse en sólo lectura y permite explorar la cuarentena. Dependencia separada en `requirements-dashboard.txt`. |
+| **Prometheus + Grafana** | `v3.5.0` / `12.1.0` | Monitoreo en tiempo real ([`monitoring/`](monitoring/)): Prometheus recolecta cada segundo las métricas que publica el pipeline y Grafana las grafica contra los límites de 2/4/8 GB. Tablero provisionado como código. |
+| **psutil + prometheus-client** | `7.2.2` / `0.26.0` | Medición de RAM y CPU del propio proceso (incluye DuckDB) y exportación en formato Prometheus desde [`src/metrics.py`](src/metrics.py). |
+
+La comparación detallada de cada herramienta contra sus alternativas (pandas, Polars, PySpark, Airflow, Prefect, Power BI, cAdvisor, etc.) está en [`docs/TECNOLOGIAS.md`](docs/TECNOLOGIAS.md).
 
 ---
 
@@ -395,7 +401,7 @@ El proyecto [`dbt_project/`](dbt_project/) organiza la construcción declarativa
 | **Constructor de la Etapa 5** | [`src/model.py`](src/model.py) (`CREATE OR REPLACE TABLE`) | [`src/dbt_runner.py`](src/dbt_runner.py) (`dbt build` con `--vars` dinámicas) |
 | **Archivo Warehouse DuckDB** | `data/warehouse/nyc_taxi.duckdb` (`527,51 MiB`) | `data/warehouse/nyc_taxi_dbt.duckdb` (`546,01 MiB`) |
 | **Hilos en DuckDB (`threads`)** | `2` | `1` (evita colisión de `temp_directory` entre cursores en `dbt-duckdb`) |
-| **Validación del modelo estrella** | Suite `pytest` + tests de integración SQL | **24 data tests en `dbt`** (`not_null`, `unique`, `relationships` y 3 tests SQL singulares) + `pytest` |
+| **Validación del modelo estrella** | Suite `pytest` + tests de integración SQL | **27 data tests en `dbt`** (`not_null`, `unique`, `relationships` y 4 tests SQL singulares) + `pytest` |
 | **Consultas de negocio (`sql/q1..q6.sql`)** | Ejecutadas sobre `nyc_taxi.duckdb` | Ejecutadas sobre `nyc_taxi_dbt.duckdb` (resultados **equivalentes dentro de `1e-5`**) |
 
 ---
@@ -485,7 +491,7 @@ El repositorio cuenta con el workflow [`.github/workflows/tests.yml`](.github/wo
 - **Pasos que ejecuta:**
   1. Instala exactamente las dependencias de [`requirements.txt`](requirements.txt).
   2. Verifica la consistencia de paquetes con `python -m pip check`.
-  3. Ejecuta la suite completa de 37 pruebas sintéticas con `python -m pytest -q`.
+  3. Ejecuta la suite completa de 40 pruebas sintéticas con `python -m pytest -q`.
   4. Valida estáticamente el proyecto dbt con `dbt parse` y `dbt compile` usando directorios temporales del runner y variables explícitas de período.
 - **Qué no ejecuta deliberadamente:** no descarga los cientos de megabytes de Parquet desde NYC TLC ni corre `dbt build` sobre datos reales en los runners de GitHub, evitando tiempos elevados y tráfico innecesario en cada commit.
 - **Estado de verificación:** todos los comandos del workflow fueron ejecutados y validados localmente; la primera ejecución remota en la pestaña *Actions* de GitHub tendrá lugar una vez que se publique (`git push`) la rama al repositorio remoto.
@@ -496,7 +502,7 @@ El repositorio cuenta con el workflow [`.github/workflows/tests.yml`](.github/wo
 
 La calidad del software y de los datos se verifica en dos niveles complementarios:
 
-1. **Suite Python (`pytest -q` $\rightarrow$ `37 passed`):**
+1. **Suite Python (`pytest -q` $\rightarrow$ `40 passed`):**
    - [`tests/test_ingest.py`](tests/test_ingest.py): idempotencia de descargas, detección de corrupción por SHA-256 y limpieza de `.part` tras 3 reintentos fallidos de red.
    - [`tests/test_schema.py`](tests/test_schema.py): mapeo a `snake_case`, inyección de `cbd_congestion_fee = NULL::DOUBLE` en 2024, obligatoriedad en 2025 y rechazo de *schema drift*.
    - [`tests/test_quality.py`](tests/test_quality.py) y [`tests/test_reconciliation.py`](tests/test_reconciliation.py): las 8 reglas `R01`–`R08`, múltiples violaciones en una misma fila y falla ante desbalance de conteos.
@@ -504,9 +510,9 @@ La calidad del software y de los datos se verifica en dos niveles complementario
    - [`tests/test_dynamic_months.py`](tests/test_dynamic_months.py): validación de meses dinámicos (`2025-01` a `2025-12`), variables Jinja de dbt, manejo de HTTP 404 para meses futuros e interpretaciones parametrizadas en [`src/results.py`](src/results.py).
    - [`tests/integration/test_integration_pipeline.py`](tests/integration/test_integration_pipeline.py) y [`tests/integration/test_sql_business_rules.py`](tests/integration/test_sql_business_rules.py): corrida extremo a extremo de las 5 etapas con datos sintéticos, idempotencia en doble corrida, aislamiento físico de particiones Hive y regresión SQL para `LaGuardia Airport`.
    - [`tests/test_orchestration.py`](tests/test_orchestration.py): estructura del grafo Dagster (9 nodos y dependencias), resolución de períodos, validación de configuración, corrida completa e idempotencia, compatibilidad con `src.pipeline` y propagación de errores.
-2. **Suite declarativa dbt (`dbt build` $\rightarrow$ `32/32 PASS`; `dbt test` $\rightarrow$ `24/24 PASS`):**
-   - 21 tests genéricos en [`dbt_project/models/schema.yml`](dbt_project/models/schema.yml) (`not_null`, `unique` y `relationships` entre `fact_trips`, `dim_zone` y `dim_date`).
-   - 3 tests singulares SQL en [`dbt_project/tests/`](dbt_project/tests/): [`agg_zone_hour_reconciles.sql`](dbt_project/tests/agg_zone_hour_reconciles.sql), [`fact_trip_count_matches_sources.sql`](dbt_project/tests/fact_trip_count_matches_sources.sql) y [`fact_zone_referential_integrity.sql`](dbt_project/tests/fact_zone_referential_integrity.sql).
+2. **Suite declarativa dbt (`dbt build` $\rightarrow$ `35/35 PASS`; `dbt test` $\rightarrow$ `27/27 PASS`):**
+   - 23 tests genéricos en [`dbt_project/models/schema.yml`](dbt_project/models/schema.yml) (`not_null`, `unique` y `relationships` entre `fact_trips`, `dim_zone` y `dim_date`).
+   - 4 tests singulares SQL en [`dbt_project/tests/`](dbt_project/tests/): [`agg_zone_hour_reconciles.sql`](dbt_project/tests/agg_zone_hour_reconciles.sql), [`fact_trip_count_matches_sources.sql`](dbt_project/tests/fact_trip_count_matches_sources.sql) y [`fact_zone_referential_integrity.sql`](dbt_project/tests/fact_zone_referential_integrity.sql).
 
 ---
 
@@ -549,7 +555,7 @@ examen_Taxis/
 │   ├── profiles.yml                               # Perfil DuckDB (memory_limit=2GB, threads=1, spill en data/tmp)
 │   ├── models/
 │   │   ├── sources.yml                            # Fuentes externas Parquet (accepted, curated) y CSV de zonas
-│   │   ├── schema.yml                             # 21 tests declarativos (not_null, unique, relationships)
+│   │   ├── schema.yml                             # 23 tests declarativos + descripciones para dbt docs
 │   │   ├── staging/
 │   │   │   ├── stg_taxi_zones.sql                 # Vista tipada del catálogo de zonas TLC
 │   │   │   └── stg_yellow_trips.sql               # Vista unificada de los dos períodos comparados
@@ -564,8 +570,12 @@ examen_Taxis/
 │   └── tests/
 │       ├── agg_zone_hour_reconciles.sql           # Test singular: SUM(agg_zone_hour.trips) == COUNT(fact_trips)
 │       ├── fact_trip_count_matches_sources.sql    # Test singular: fact_trips coincide con suma de fuentes aceptadas
-│       └── fact_zone_referential_integrity.sql    # Test singular: 0 huérfanos entre fact_trips y dim_zone
+│       ├── fact_zone_referential_integrity.sql    # Test singular: 0 huérfanos entre fact_trips y dim_zone
+│       └── fact_respects_quality_gate.sql         # Test singular: ningún viaje del hecho viola una regla de rechazo
+├── dashboard/
+│   └── app.py                                     # Dashboard Streamlit: Q1–Q6, insights, calidad, cuarentena y rendimiento
 ├── docs/
+│   ├── ANALISIS_RESULTADOS.md                     # Análisis profundo de resultados e insights
 │   ├── ARQUITECTURA.md                            # Arquitecturas Python y dbt, Docker Compose y GitHub Actions
 │   ├── AUDITORIA_TECNICA.md                       # Auditoría SQL (Q1–Q6), integridad del modelo y estabilidad de claves
 │   ├── CI.md                                      # Documentación del flujo de Integración Continua
@@ -573,11 +583,16 @@ examen_Taxis/
 │   ├── DAGSTER.md                                 # Orquestación Dagster: DAG, configuración, demo y pruebas
 │   ├── DOCKER.md                                  # Guía completa de Docker, Compose, volúmenes y memoria
 │   ├── RENDIMIENTO.md                             # Tiempos, memoria y análisis EXPLAIN ANALYZE de consultas
+│   ├── TECNOLOGIAS.md                             # Justificación de cada tecnología frente a sus alternativas
 │   ├── decisiones_parte_a.md                      # Fundamentación de ingesta, contrato YAML y reglas R01–R08
 │   ├── informe_pruebas_final.md                   # Guía rápida de reproducción en PowerShell
 │   ├── revision_integracion.md                    # Registro histórico de auditoría e integración QA
 │   └── verificacion_parte_a.md                    # Evidencia y hashes SHA-256 de las etapas 1 a 3
+├── monitoring/
+│   ├── prometheus.yml                             # Recolección cada 1 s (pipeline local y en Docker)
+│   └── grafana/                                   # Datasource y tablero provisionados como código
 ├── sql/
+│   ├── insights/                                  # 7 consultas extra (I1–I7) que generan INSIGHTS.md
 │   ├── q1_top_zones.sql                           # Consulta 1: Top 10 zonas de origen (por ID y nombre) y variación
 │   ├── q2_peak_revenue_hour.sql                   # Consulta 2: Hora del día con mayor ingreso promedio por viaje
 │   ├── q3_cbd_fee.sql                             # Consulta 3: Proporción global y top 5 zonas con cbd_congestion_fee > 0
@@ -594,9 +609,13 @@ examen_Taxis/
 │   ├── model.py                                   # Etapa 5 (modo Python): Modelo estrella en nyc_taxi.duckdb
 │   ├── dbt_runner.py                              # Etapa 5 (modo dbt): dbt build en nyc_taxi_dbt.duckdb
 │   ├── results.py                                 # Formateo e interpretación dinámica de RESULTADOS.md
+│   ├── insights.py                                # Ejecuta sql/insights/ en sólo lectura y genera INSIGHTS.md
+│   ├── metrics.py                                 # Tiempo y pico de RAM por etapa; exportador Prometheus opcional
 │   ├── pipeline.py                                # CLI único (--mes YYYY-MM --modelo python|dbt --hasta-calidad)
 │   └── orchestration.py                           # Orquestación Dagster: DAG de 9 nodos, recurso PipelineParams
 ├── tests/
+│   ├── conftest.py                                # Evita que los tests escriban métricas en data/ real
+│   ├── test_metrics.py                            # Métricas por etapa y exportador Prometheus
 │   ├── test_dynamic_months.py                     # 11 pruebas de parametrización dinámica de meses y errores 404
 │   ├── test_ingest.py                             # Pruebas de idempotencia SHA-256 y fallas de red
 │   ├── test_pipeline.py                           # Pruebas de orquestación y selección excluyente de motor
@@ -606,6 +625,7 @@ examen_Taxis/
 │   ├── test_orchestration.py                      # Pruebas de Dagster: grafo, períodos, corrida completa e idempotencia
 │   └── integration/
 │       ├── test_integration_pipeline.py           # Prueba extremo a extremo (5 etapas), idempotencia y aislamiento Hive
+│       ├── test_insights.py                       # Las 7 consultas de insights corren sobre el modelo real
 │       └── test_sql_business_rules.py             # Prueba de regresión SQL para JFK y LaGuardia
 ├── .dockerignore                                  # Exclusión de data/, .venv/ y cachés del contexto Docker
 ├── .gitignore                                     # Exclusión de data/, .venv/ y artefactos de compilación dbt
@@ -614,7 +634,10 @@ examen_Taxis/
 ├── Makefile                                       # Atajos opcionales para entornos con GNU Make
 ├── README.md                                      # Presentación principal del examen
 ├── RESULTADOS.md                                  # Salida generada de las 6 consultas de negocio
-└── requirements.txt                               # Dependencias exactas del proyecto
+├── INSIGHTS.md                                    # Salida generada de las 7 consultas de insights
+├── run.ps1                                        # Atajos para Windows: .\run.ps1 pipeline | dashboard | monitoreo | ...
+├── requirements.txt                               # Dependencias exactas del pipeline
+└── requirements-dashboard.txt                     # requirements.txt + Streamlit (sólo para el dashboard)
 ```
 
 ---
@@ -658,7 +681,7 @@ Si `python` no está disponible, usar `py -3.12 -m venv .venv`.
 
 ### 18.4. Ejecutar tests
 
-La suite actual contiene **37 tests** en `tests/` y `tests/integration/`:
+La suite actual contiene **40 tests** en `tests/` y `tests/integration/`:
 
 ~~~powershell
 .\.venv\Scripts\python.exe -m pytest -q
@@ -763,7 +786,7 @@ docker compose down --remove-orphans
 
 ### 18.10. Cómo comprobar resultados y archivos generados
 
-En los logs del modo Python se busca Finalizó el pipeline completo; el modo dbt muestra el resumen de dbt build (en la ejecución de referencia: 32/32 tareas). Después se revisan:
+En los logs del modo Python se busca Finalizó el pipeline completo; el modo dbt muestra el resumen de dbt build (en la ejecución de referencia: 35/35 tareas). Después se revisan:
 
 - RESULTADOS.md: las seis consultas y sus interpretaciones.
 - data/reports/: reportes JSON de esquema y calidad.
@@ -846,9 +869,98 @@ Los resultados de referencia de junio de 2025 se mantienen en RESULTADOS.md: 4.0
 
 
 
+## 20. Dashboard, Monitoreo en Tiempo Real e Insights
+
+Tres capas **opcionales** sobre el núcleo. Ninguna modifica datos ni resultados: si se borran, el pipeline funciona igual. La justificación de cada herramienta está en [`docs/TECNOLOGIAS.md`](docs/TECNOLOGIAS.md).
+
+```mermaid
+flowchart LR
+    P["Pipeline<br/>(terminal · Dagster · Docker)"] -->|"src/metrics.py<br/>:9108/metrics"| PR["Prometheus<br/>scrape cada 1 s"]
+    PR --> G["Grafana :3001<br/>RAM · CPU · etapa · calidad"]
+    P -->|"warehouse DuckDB<br/>(sólo lectura)"| S["Streamlit :8501<br/>Q1–Q6 · I1–I7 · cuarentena"]
+    P -->|"data/control/run_metrics.csv"| S
+    P -->|"sql/insights/*.sql"| I["INSIGHTS.md"]
+```
+
+### 20.1. Atajos en Windows (`run.ps1`)
+
+| Comando | Qué hace |
+| --- | --- |
+| `.\run.ps1 instalar` | Crea `.venv` e instala `requirements-dashboard.txt` (pipeline + Streamlit) |
+| `.\run.ps1 test` | `pytest -q` (40 tests) |
+| `.\run.ps1 pipeline [-Mes 2025-06] [-Modelo python\|dbt]` | Las 5 etapas; si Grafana está levantado, publica métricas en vivo |
+| `.\run.ps1 insights` | Genera `INSIGHTS.md` con las 7 consultas extra |
+| `.\run.ps1 dashboard` | Dashboard de resultados en http://localhost:8501 |
+| `.\run.ps1 dagster` | Interfaz de Dagster en http://localhost:3000 (con métricas si Grafana está levantado) |
+| `.\run.ps1 monitoreo` / `apagar` | Levanta o apaga Prometheus (:9090) y Grafana (:3001) |
+| `.\run.ps1 docker` | Pipeline dentro de Docker (límite 4 GB) |
+| `.\run.ps1 dbt-docs` | Documentación dbt con grafo de linaje en http://localhost:8081 |
+
+### 20.2. Monitoreo en tiempo real (Prometheus + Grafana)
+
+[`src/metrics.py`](src/metrics.py) mide **desde adentro del proceso** con `psutil`:
+- RAM RSS, que incluye a DuckDB porque corre embebido;
+- CPU;
+- etapa y período en curso;
+- duración y pico de RAM de cada etapa;
+- filas leídas, aceptadas y en cuarentena, y violaciones por regla.
+
+Siempre escribe una fila por etapa en `data/control/run_metrics.csv`. Si existe `NYC_TAXI_METRICS_PORT`, además publica las métricas para Prometheus. **Funciona igual por terminal, por Dagster o en Docker**, a diferencia de `docker stats`, que sólo ve contenedores.
+
+En la terminal 1:
+
+```powershell
+.\run.ps1 monitoreo
+```
+
+En la terminal 2 (o lanzar el job desde Dagster):
+
+```powershell
+.\run.ps1 pipeline
+```
+
+El tablero "NYC Taxi: pipeline en tiempo real" dibuja la memoria contra tres líneas de referencia: **2 GB** (memory_limit de DuckDB), **4 GB** (contenedor) y **8 GB** (notebook de la consigna). **Pico medido del proceso completo: ~2 GB.**
+
+### 20.3. Dashboard de resultados (Streamlit)
+
+[`dashboard/app.py`](dashboard/app.py) tiene cinco pestañas:
+
+| Pestaña | Contenido |
+| --- | --- |
+| Resumen | KPIs de la comparación interanual y viajes por día |
+| Preguntas Q1–Q6 | Las seis consultas de la consigna en gráficos, con su SQL |
+| Insights I1–I7 | Las consultas extra con su conclusión |
+| Calidad y cuarentena | Reportes por mes, violaciones por regla y un **explorador de filas en cuarentena** filtrable por regla (punto de la demo oral) |
+| Rendimiento | Duración y pico de RAM por etapa, historial de corridas y log de ingesta |
+
+Lee el warehouse en **modo sólo lectura** y con conexiones cortas, así que no bloquea al pipeline.
+
+### 20.4. Insights y análisis de resultados
+
+[`sql/insights/`](sql/insights/) agrega siete consultas sobre el mismo modelo estrella. `python -m src.insights` las vuelca en [`INSIGHTS.md`](INSIGHTS.md), y la interpretación está en [`docs/ANALISIS_RESULTADOS.md`](docs/ANALISIS_RESULTADOS.md).
+
+| # | Pregunta | Insight principal (2025-06 vs 2024-06) |
+| --- | --- | --- |
+| I1 | ¿El peaje CBD aceleró Manhattan? | +4–7 % de velocidad de noche; sin cambio entre 10 y 16 h |
+| I2 | Mezcla de tipos de pago | Flex Fare 11,6 % → 27,6 %; respalda la hipótesis de Q6 |
+| I3 | Viajes por barrio | Brooklyn y Bronx ×3,3; Manhattan +12 % pero pierde participación |
+| I4 | Zonas ganadoras y perdedoras | Sólo 3 de 90 zonas bajaron (LaGuardia, Central Park, East Elmhurst) |
+| I5 | Mapa de calor día × hora | Pico martes–jueves 18–22 h; fines de semana fuertes a la madrugada |
+| I6 | Distribución por distancia | Más viajes de 3–15 mi con tarifa por tramo 8–9 % menor: la tarifa media estable esconde dos efectos opuestos |
+| I7 | Ingreso por minuto | Madrugada ~2,0 US$/min vs mediodía ~1,45 US$/min |
+
+### 20.5. dbt docs
+
+`.\run.ps1 dbt-docs` ejecuta `dbt docs generate` y `dbt docs serve`. Muestra el catálogo de tablas con sus descripciones (definidas en `schema.yml`) y el **grafo de linaje** `sources → staging → intermediate → marts → tests`.
+
+---
+
 ## 21. Documentación Complementaria del Proyecto
 
 - [RESULTADOS.md](RESULTADOS.md): consultas SQL ejecutadas, tablas de resultados e interpretaciones para las 6 preguntas de negocio.
+- [INSIGHTS.md](INSIGHTS.md): resultados de las 7 consultas de insights (I1–I7).
+- [docs/ANALISIS_RESULTADOS.md](docs/ANALISIS_RESULTADOS.md): análisis profundo de Q1–Q6, insights y calidad de datos.
+- [docs/TECNOLOGIAS.md](docs/TECNOLOGIAS.md): justificación de cada tecnología frente a sus alternativas.
 - [AGENTS.md](AGENTS.md): acuerdos de integración, ramas y contratos de funciones entre módulos.
 - [contracts/yellow_schema.yaml](contracts/yellow_schema.yaml): contrato versionado de esquema v1.
 - [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md): arquitecturas Python/dbt, Docker Compose y GitHub Actions.
@@ -862,12 +974,12 @@ Los resultados de referencia de junio de 2025 se mantienen en RESULTADOS.md: 4.0
 
 ---
 
-## 22. Declaración de Uso de Inteligencia Artificial (Codex y Antigravity)
+## 22. Declaración de Uso de Inteligencia Artificial (Codex, Antigravity y Claude)
 
 En cumplimiento de las normas académicas de la cátedra, se declara de forma veraz el uso de herramientas de Inteligencia Artificial como asistentes de ingeniería durante el desarrollo:
 
 - **OpenAI Codex:** utilizado como asistente para la codificación modular de las etapas, dbt_project/, parametrización de meses, GitHub Actions y auditoría SQL.
 - **Google Antigravity (Gemini):** utilizado para auditoría de integración, pruebas de integración, correcciones SQL, dockerización y consolidación documental.
-- **Claude (Anthropic):** utilizado para la integración de Dagster, la resolución de dependencias entre Dagster y dbt y la hipótesis documentada de Q6.
+- **Claude (Anthropic, mediante Claude Code):** utilizado para la integración de Dagster, la resolución de dependencias entre Dagster y dbt, la hipótesis documentada de Q6, la capa de métricas y monitoreo (`src/metrics.py`, Prometheus y Grafana), el dashboard de Streamlit, las consultas de insights y su análisis (`docs/ANALISIS_RESULTADOS.md`), la justificación de tecnologías (`docs/TECNOLOGIAS.md`), los tests de dbt agregados y el script `run.ps1`.
 
 Todas las decisiones de arquitectura, umbrales de calidad, consultas SQL y métricas de rendimiento fueron verificadas sobre los datos oficiales de NYC TLC y son comprendidas por los integrantes.
