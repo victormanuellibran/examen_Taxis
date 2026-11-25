@@ -16,7 +16,7 @@ Las mediciones de memoria disponibles corresponden a ejecuciones completas recie
 | Modo | Períodos | Tiempo | Resultado |
 |---|---|---:|---|
 | Python | 2024-06 + 2025-06 | 31,1 s | correcto |
-| dbt | 2024-06 + 2025-06 | 37,9 s | `dbt build` 32/32 |
+| dbt | 2024-06 + 2025-06 | 37,9 s | `dbt build` 35/35 |
 
 Tamaños finales observados:
 

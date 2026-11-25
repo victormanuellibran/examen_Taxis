@@ -29,7 +29,7 @@ Si `docker compose config` muestra errores, revisar que Docker Desktop esté act
 docker compose run --rm pipeline python -m pytest -q
 ```
 
-Resultado esperado: `37 passed`.
+Resultado esperado: `40 passed`.
 
 ### Pipeline con Python
 

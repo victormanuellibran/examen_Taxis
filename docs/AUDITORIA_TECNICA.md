@@ -48,8 +48,8 @@ El detalle de `EXPLAIN ANALYZE`, tiempos y tamaños está en [RENDIMIENTO.md](RE
 
 - `pytest`: 28 passed.
 - Pipeline Python junio: correcto.
-- Pipeline dbt junio: correcto; `dbt build` 32/32.
-- `dbt test`: 24/24.
+- Pipeline dbt junio: correcto; `dbt build` 35/35.
+- `dbt test`: 27/27.
 - Reconciliación junio: 3.539.193 = 3.441.465 + 97.728 y 4.322.960 = 4.052.233 + 270.727.
 - Mes dinámico adicional de mayo ya verificado en la iteración anterior.
 

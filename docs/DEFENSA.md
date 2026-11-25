@@ -29,7 +29,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Referencia: `37 passed`.
+Referencia: `40 passed`.
 
 ## Pipeline Python
 
@@ -72,7 +72,7 @@ El valor de `--mes` debe tener formato `YYYY-MM`.
 .\.venv\Scripts\dbt.exe test --project-dir dbt_project --profiles-dir dbt_project
 ```
 
-Referencias: `dbt build 32/32` y `dbt test 24/24`.
+Referencias: `dbt build 35/35` y `dbt test 27/27`.
 
 ## Dagster
 
@@ -332,6 +332,47 @@ dbt compile
 
 La CI no descarga los Parquet grandes ni ejecuta `dbt build`.
 
+## Monitoreo en vivo, dashboard e insights
+
+Orden recomendado para la demo, con dos terminales abiertas en la raíz del repo.
+
+**Terminal 1.** Levanta Prometheus y Grafana, y abre Grafana en el navegador:
+
+```powershell
+.\run.ps1 monitoreo
+```
+
+**Terminal 2.** Corre el pipeline; en Grafana se ve la etapa actual, la RAM y la CPU en vivo:
+
+```powershell
+.\run.ps1 pipeline
+```
+
+Al terminar, en la misma terminal 2, generá los insights y abrí el dashboard:
+
+```powershell
+.\run.ps1 insights
+.\run.ps1 dashboard
+```
+
+Para la documentación dbt con el grafo de linaje (requiere una corrida previa con `-Modelo dbt`):
+
+```powershell
+.\run.ps1 dbt-docs
+```
+
+**Qué decir:**
+- Grafana: *"el pipeline mide su propia memoria; las líneas punteadas son 2 GB de DuckDB, 4 GB del contenedor y 8 GB de la consigna; el pico es ~2 GB"*.
+- Dashboard, pestaña **Calidad y cuarentena**: elegir la regla R02 y mostrar una fila rechazada. Cubre el punto de la consigna *"mostrar una fila en cuarentena con su regla violada"*.
+- Insights: *"la tarifa media estable esconde dos efectos opuestos: hay más viajes largos, pero cada tramo es más barato (I6)"*.
+- Justificación de herramientas: `docs/TECNOLOGIAS.md`. Análisis completo: `docs/ANALISIS_RESULTADOS.md`.
+
+Apagar el monitoreo al final:
+
+```powershell
+.\run.ps1 apagar
+```
+
 ## Qué mostrar con cada herramienta
 
 | Evidencia | Comando o archivo |
@@ -339,12 +380,16 @@ La CI no descarga los Parquet grandes ni ejecuta `dbt build`.
 | Tests Python | `python -m pytest -q` |
 | Grafo y estados | Dagster |
 | Resultados Q1–Q6 | `RESULTADOS.md` |
+| Insights I1–I7 | `INSIGHTS.md` y `docs/ANALISIS_RESULTADOS.md` |
 | Conteos y relaciones | script DuckDB |
-| Calidad | `quality_YYYY-MM.json` |
+| Calidad | `quality_YYYY-MM.json` y el dashboard (pestaña Calidad) |
+| Fila en cuarentena | Dashboard → Calidad y cuarentena → regla R02 |
 | Warehouse | `data/warehouse/*.duckdb` |
-| RAM y CPU | `docker stats` |
+| RAM y CPU en vivo | Grafana (`.\run.ps1 monitoreo`) o `docker stats` |
+| Tiempo y RAM por etapa | Dashboard → Rendimiento (`data/control/run_metrics.csv`) |
 | Plan SQL | `EXPLAIN ANALYZE` |
-| Modelos dbt | `dbt_project/models/` |
+| Modelos dbt y linaje | `dbt_project/models/` y `.\run.ps1 dbt-docs` |
+| Justificación de tecnologías | `docs/TECNOLOGIAS.md` |
 | CI | `.github/workflows/tests.yml` |
 
 ## Reglas durante la demostración
