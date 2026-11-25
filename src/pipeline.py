@@ -3,6 +3,7 @@ import argparse
 import importlib
 import logging
 
+from . import metrics
 from .config import parse_month
 from .ingest import run_ingest
 from .quality import run_quality
@@ -28,17 +29,28 @@ def main(argv=None) -> int:
                 model = importlib.import_module(model_module).run_model
             except (ModuleNotFoundError, AttributeError) as exc:
                 raise RuntimeError("No se pudo cargar la integración de transformación/modelado. Para probar A usar --hasta-calidad.") from exc
+        metrics.start("terminal", args.modelo)
         for period in months:
             LOG.info("Procesando %s", period)
-            accepted = run_quality(period, run_schema(period, run_ingest(period)))
+            with metrics.stage("ingesta", period):
+                raw = run_ingest(period)
+            with metrics.stage("esquema", period):
+                staged = run_schema(period, raw)
+            with metrics.stage("calidad", period):
+                accepted = run_quality(period, staged)
+            metrics.publish_quality(period)
             if not args.hasta_calidad:
-                transform(period, accepted)
+                with metrics.stage("transformacion", period):
+                    transform(period, accepted)
         if not args.hasta_calidad:
-            model(months)
+            with metrics.stage("modelo"):
+                model(months)
         LOG.info("Finalizó %s para %s con modelo=%s", "la ejecución parcial hasta calidad" if args.hasta_calidad else "el pipeline completo", months, args.modelo)
+        metrics.finish("ok")
         return 0
     except Exception:
         LOG.exception("El pipeline falló")
+        metrics.finish("error")
         return 1
 
 

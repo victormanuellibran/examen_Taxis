@@ -34,6 +34,7 @@ from dagster import (
     op,
 )
 
+from . import metrics
 from .config import data_dir, parse_month
 from .ingest import run_ingest
 from .quality import run_quality
@@ -83,7 +84,9 @@ def _build_ingest_op(role: str):
     @op(name=f"ingesta_{role}", description="Etapa 1: descarga idempotente con control SHA-256.")
     def _ingest(context: OpExecutionContext, params: PipelineParams) -> str:
         month = params.month_for(role)
-        raw_path = run_ingest(month)
+        metrics.start("dagster", params.modelo)
+        with metrics.stage("ingesta", month):
+            raw_path = run_ingest(month)
         context.add_output_metadata({"mes": month, "archivo_raw": MetadataValue.path(str(raw_path))})
         return str(raw_path)
 
@@ -95,7 +98,8 @@ def _build_schema_op(role: str):
         description="Etapa 2: contrato versionado, snake_case y detección de drift.")
     def _schema(context: OpExecutionContext, raw_path: str, params: PipelineParams) -> str:
         month = params.month_for(role)
-        staged_path = run_schema(month, Path(raw_path))
+        with metrics.stage("esquema", month):
+            staged_path = run_schema(month, Path(raw_path))
         report = data_dir() / "reports" / f"schema_{month}.json"
         metadata = {"mes": month, "archivo_staging": MetadataValue.path(str(staged_path))}
         if report.exists():
@@ -113,7 +117,9 @@ def _build_quality_op(role: str):
         description="Etapa 3: ocho reglas, cuarentena y reconciliación de conteos.")
     def _quality(context: OpExecutionContext, staged_path: str, params: PipelineParams) -> str:
         month = params.month_for(role)
-        accepted_path = run_quality(month, Path(staged_path))
+        with metrics.stage("calidad", month):
+            accepted_path = run_quality(month, Path(staged_path))
+        metrics.publish_quality(month)
         context.add_output_metadata({
             "mes": month,
             "archivo_aceptados": MetadataValue.path(str(accepted_path)),
@@ -129,7 +135,8 @@ def _build_transform_op(role: str):
         description="Etapa 4: columnas derivadas, enriquecimiento y partición Hive.")
     def _transform(context: OpExecutionContext, accepted_path: str, params: PipelineParams) -> str:
         month = params.month_for(role)
-        curated_path = run_transform(month, Path(accepted_path))
+        with metrics.stage("transformacion", month):
+            curated_path = run_transform(month, Path(accepted_path))
         context.add_output_metadata({"mes": month, "particion_curada": MetadataValue.path(str(curated_path))})
         return str(curated_path)
 
@@ -152,7 +159,9 @@ def modelo_estrella(
     module = params.model_module()
     run_model = importlib.import_module(module).run_model
     context.log.info("Construyendo el modelo con %s para %s", module, months)
-    run_model(months)
+    with metrics.stage("modelo"):
+        run_model(months)
+    metrics.finish("ok")
     context.add_output_metadata({
         "motor": params.modelo,
         "meses": MetadataValue.json(months),
