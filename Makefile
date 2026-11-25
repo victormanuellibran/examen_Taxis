@@ -21,7 +21,7 @@ dagster:
 	dagster dev -m src.orchestration
 
 monitoreo:
-	docker compose --profile monitoreo up -d prometheus grafana
+	docker compose --profile monitoreo up -d prometheus grafana dozzle
 
 dbt-docs:
 	$(PYTHON) -m src.dbt_runner docs --mes $(MES) --serve

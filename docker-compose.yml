@@ -26,8 +26,8 @@ services:
     command: ["python", "-m", "src.pipeline", "--mes", "2025-06"]
 
   # --- Monitoreo en tiempo real (opcional) -------------------------------------------
-  # docker compose --profile monitoreo up -d prometheus grafana
-  # Grafana: http://localhost:3001   Prometheus: http://localhost:9090
+  # docker compose --profile monitoreo up -d prometheus grafana dozzle
+  # Grafana: http://localhost:3001   Prometheus: http://localhost:9090   Dozzle: http://localhost:8888
   prometheus:
     profiles: ["monitoreo"]
     image: prom/prometheus:v3.5.0
@@ -61,3 +61,17 @@ services:
     ports:
       - "3001:3000"
     mem_limit: 512m
+
+  # Logs de los contenedores en vivo + CPU/RAM de cada uno: http://localhost:8888
+  dozzle:
+    profiles: ["monitoreo"]
+    image: amir20/dozzle:v8.12.0
+    container_name: nyc_taxi_dozzle
+    environment:
+      DOZZLE_FILTER: name=nyc_taxi        # sólo los contenedores de este proyecto
+      DOZZLE_NO_ANALYTICS: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # sólo lectura: ve contenedores, no los modifica
+    ports:
+      - "8888:8080"
+    mem_limit: 128m

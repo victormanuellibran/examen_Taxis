@@ -253,6 +253,7 @@ Todas las dependencias se encuentran fijadas en [`requirements.txt`](requirement
 | **Dagster** | `1.13.31` | Orquestador declarativo de pipelines. Define un DAG de nueve nodos (dos cadenas de cuatro etapas convergiendo en el modelo estrella), registra metadatos por etapa (filas leídas, aceptadas, en cuarentena) y ofrece interfaz web (`dagster dev`) para observar, lanzar y relanzar ejecuciones. Documentado en [`docs/DAGSTER.md`](docs/DAGSTER.md). |
 | **Streamlit** | `1.67.0` | Dashboard de resultados en Python ([`dashboard/app.py`](dashboard/app.py)): reutiliza las consultas de `sql/`, abre el warehouse en sólo lectura y permite explorar la cuarentena. Dependencia separada en `requirements-dashboard.txt`. |
 | **Prometheus + Grafana** | `v3.5.0` / `12.1.0` | Monitoreo en tiempo real ([`monitoring/`](monitoring/)): Prometheus recolecta cada segundo las métricas que publica el pipeline y Grafana las grafica contra los límites de 2/4/8 GB. Tablero provisionado como código. |
+| **Dozzle** | `v8.12.0` | Visor web de los logs de los contenedores en vivo, con CPU y RAM de cada uno (`http://localhost:8888`). Acceso de sólo lectura al socket de Docker y filtrado a los contenedores `nyc_taxi_*`. |
 | **psutil + prometheus-client** | `7.2.2` / `0.26.0` | Medición de RAM y CPU del propio proceso (incluye DuckDB) y exportación en formato Prometheus desde [`src/metrics.py`](src/metrics.py). |
 
 La comparación detallada de cada herramienta contra sus alternativas (pandas, Polars, PySpark, Airflow, Prefect, Power BI, cAdvisor, etc.) está en [`docs/TECNOLOGIAS.md`](docs/TECNOLOGIAS.md).
@@ -877,6 +878,7 @@ Tres capas **opcionales** sobre el núcleo. Ninguna modifica datos ni resultados
 flowchart LR
     P["Pipeline<br/>(terminal · Dagster · Docker)"] -->|"src/metrics.py<br/>:9108/metrics"| PR["Prometheus<br/>scrape cada 1 s"]
     PR --> G["Grafana :3001<br/>RAM · CPU · etapa · calidad"]
+    P -->|"logs del contenedor"| D["Dozzle :8888<br/>logs en vivo · CPU/RAM"]
     P -->|"warehouse DuckDB<br/>(sólo lectura)"| S["Streamlit :8501<br/>Q1–Q6 · I1–I7 · cuarentena"]
     P -->|"data/control/run_metrics.csv"| S
     P -->|"sql/insights/*.sql"| I["INSIGHTS.md"]
@@ -892,7 +894,7 @@ flowchart LR
 | `.\run.ps1 insights` | Genera `INSIGHTS.md` con las 7 consultas extra |
 | `.\run.ps1 dashboard` | Dashboard de resultados en http://localhost:8501 |
 | `.\run.ps1 dagster` | Interfaz de Dagster en http://localhost:3000 (con métricas si Grafana está levantado) |
-| `.\run.ps1 monitoreo` / `apagar` | Levanta o apaga Prometheus (:9090) y Grafana (:3001) |
+| `.\run.ps1 monitoreo` / `apagar` | Levanta o apaga Prometheus (:9090), Grafana (:3001) y Dozzle (:8888) |
 | `.\run.ps1 docker` | Pipeline dentro de Docker (límite 4 GB) |
 | `.\run.ps1 dbt-docs` | Documentación dbt con grafo de linaje en http://localhost:8081 |
 
@@ -920,6 +922,8 @@ En la terminal 2 (o lanzar el job desde Dagster):
 ```
 
 El tablero "NYC Taxi: pipeline en tiempo real" dibuja la memoria contra tres líneas de referencia: **2 GB** (memory_limit de DuckDB), **4 GB** (contenedor) y **8 GB** (notebook de la consigna). **Pico medido del proceso completo: ~2 GB.**
+
+Cuando el pipeline corre en Docker (`.\run.ps1 docker`), **Dozzle** (http://localhost:8888) muestra además sus **logs en vivo** (cada etapa, los conteos de calidad, el `reused` de la ingesta) con la CPU y la RAM del contenedor. Grafana responde *cuánta memoria y tiempo usa cada etapa*; Dozzle, *qué está diciendo el pipeline en este momento*.
 
 ### 20.3. Dashboard de resultados (Streamlit)
 

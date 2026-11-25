@@ -54,8 +54,8 @@ Uso: .\run.ps1 <accion> [-Mes AAAA-MM] [-Modelo python|dbt]
   insights    genera INSIGHTS.md (7 consultas extra) leyendo el warehouse
   dashboard   abre el dashboard de resultados     -> http://localhost:8501
   dagster     abre la interfaz de Dagster          -> http://localhost:3000
-  monitoreo   levanta Prometheus + Grafana         -> http://localhost:3001
-  apagar      apaga Prometheus y Grafana
+  monitoreo   levanta Prometheus + Grafana + Dozzle -> http://localhost:3001 y :8888
+  apagar      apaga Prometheus, Grafana y Dozzle
   docker      corre el pipeline dentro de Docker (con límite de 4 GB)
   dbt-docs    genera y abre la documentación dbt   -> http://localhost:8081
   todo        test + pipeline + insights
@@ -79,13 +79,14 @@ Uso: .\run.ps1 <accion> [-Mes AAAA-MM] [-Modelo python|dbt]
         & (Join-Path $PSScriptRoot ".venv\Scripts\dagster.exe") dev -m src.orchestration
     }
     "monitoreo" {
-        docker compose --profile monitoreo up -d prometheus grafana
+        docker compose --profile monitoreo up -d prometheus grafana dozzle
         Write-Host "Grafana:    http://localhost:3001  (tablero 'NYC Taxi: pipeline en tiempo real')" -ForegroundColor Green
         Write-Host "Prometheus: http://localhost:9090" -ForegroundColor Green
+        Write-Host "Dozzle:     http://localhost:8888  (logs de los contenedores en vivo)" -ForegroundColor Green
         Write-Host "Ahora corré el pipeline en otra terminal (.\run.ps1 pipeline o .\run.ps1 docker)."
         Start-Process "http://localhost:3001"
     }
-    "apagar" { docker compose --profile monitoreo stop prometheus grafana }
+    "apagar" { docker compose --profile monitoreo stop prometheus grafana dozzle }
     "docker" { docker compose up --build pipeline }
     "dbt-docs" { Assert-Venv; & $Py -m src.dbt_runner docs --mes $Mes --serve }
     "todo" {
