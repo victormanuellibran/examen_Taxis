@@ -135,7 +135,18 @@ Sus dependencias están en `requirements-dashboard.txt`, separadas. El pipeline 
 
 **Por qué Prometheus + Grafana:** es la combinación estándar de observabilidad. Ambos corren como contenedores oficiales (`docker compose --profile monitoreo`) y el tablero viene **provisionado como código** (`monitoring/grafana/dashboards/*.json`), sin clics manuales.
 
-**Costo:** dos contenedores de ≤ 512 MB, sólo cuando se pide el perfil `monitoreo`. Si no se levantan, el pipeline no se entera: el exportador no frena nada si falla.
+**Complemento: Dozzle.**
+- **Qué hace:** visor web de los **logs** de los contenedores en vivo, con buscador y la CPU y RAM de cada uno.
+- **Por qué sumarlo:** Grafana muestra números; Dozzle muestra *lo que el pipeline va diciendo* (etapas, conteos de calidad, `reused`) sin abrir una terminal con `docker logs -f`.
+- **Costo y seguridad:** un solo contenedor de 128 MB, sin configuración ni base de datos. Lee el socket de Docker en **modo sólo lectura** y se filtra a los contenedores `nyc_taxi_*`.
+- **Límite:** como `docker stats`, sólo ve contenedores. Por eso no reemplaza a Grafana.
+
+| Alternativa | Por qué no |
+| --- | --- |
+| Portainer | Administra Docker completo (crear y borrar contenedores): mucho más de lo necesario y con permisos de escritura. |
+| Loki + Grafana | Guarda logs con historial, pero agrega otro servicio y configuración de recolección. |
+
+**Costo:** tres contenedores (Prometheus y Grafana ≤ 512 MB, Dozzle 128 MB), sólo cuando se pide el perfil `monitoreo`. Si no se levantan, el pipeline no se entera: el exportador no frena nada si falla.
 
 ## 10. Pruebas: **pytest + dbt tests**
 

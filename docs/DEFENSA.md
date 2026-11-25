@@ -362,6 +362,7 @@ Para la documentación dbt con el grafo de linaje (requiere una corrida previa c
 ```
 
 **Qué decir:**
+- Dozzle (http://localhost:8888, con `.\run.ps1 docker`): los logs del contenedor en vivo, con CPU y RAM. *"Acá vemos qué dice cada etapa mientras corre, sin abrir una terminal"*.
 - Grafana: *"el pipeline mide su propia memoria; las líneas punteadas son 2 GB de DuckDB, 4 GB del contenedor y 8 GB de la consigna; el pico es ~2 GB"*.
 - Dashboard, pestaña **Calidad y cuarentena**: elegir la regla R02 y mostrar una fila rechazada. Cubre el punto de la consigna *"mostrar una fila en cuarentena con su regla violada"*.
 - Insights: *"la tarifa media estable esconde dos efectos opuestos: hay más viajes largos, pero cada tramo es más barato (I6)"*.
@@ -386,6 +387,7 @@ Apagar el monitoreo al final:
 | Fila en cuarentena | Dashboard → Calidad y cuarentena → regla R02 |
 | Warehouse | `data/warehouse/*.duckdb` |
 | RAM y CPU en vivo | Grafana (`.\run.ps1 monitoreo`) o `docker stats` |
+| Logs del contenedor en vivo | Dozzle (http://localhost:8888) |
 | Tiempo y RAM por etapa | Dashboard → Rendimiento (`data/control/run_metrics.csv`) |
 | Plan SQL | `EXPLAIN ANALYZE` |
 | Modelos dbt y linaje | `dbt_project/models/` y `.\run.ps1 dbt-docs` |
