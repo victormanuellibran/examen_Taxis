@@ -25,7 +25,7 @@
             "uid": "prometheus"
           },
           "expr": "nyc_taxi_stage_active == 1",
-          "legendFormat": "{{stage}} · {{period}}",
+          "legendFormat": "{{modo}} · {{stage}} · {{period}}",
           "refId": "A",
           "instant": true,
           "range": false
@@ -128,7 +128,7 @@
     },
     {
       "type": "stat",
-      "title": "Pico de RAM (últimos 30 min)",
+      "title": "Pico de RAM por modo (30 min)",
       "description": "Máximo RSS del proceso del pipeline. La consigna exige que corra en una notebook de 8 GB.",
       "targets": [
         {
@@ -136,8 +136,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(max_over_time(nyc_taxi_process_memory_peak_bytes[30m]))",
-          "legendFormat": "pico",
+          "expr": "max by (modo) (max_over_time(nyc_taxi_process_memory_peak_bytes[30m]))",
+          "legendFormat": "{{modo}}",
           "refId": "A"
         }
       ],
@@ -358,15 +358,15 @@
     },
     {
       "type": "bargauge",
-      "title": "Duración por etapa (s), última corrida",
+      "title": "Duración por etapa (s): local vs docker",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (stage, period) (last_over_time(nyc_taxi_stage_duration_seconds[30m]))",
-          "legendFormat": "{{stage}} · {{period}}",
+          "expr": "max by (modo, stage, period) (last_over_time(nyc_taxi_stage_duration_seconds[30m]))",
+          "legendFormat": "{{modo}} · {{stage}} · {{period}}",
           "refId": "A",
           "instant": true,
           "range": false
@@ -404,15 +404,15 @@
     },
     {
       "type": "bargauge",
-      "title": "Pico de RAM por etapa, última corrida",
+      "title": "Pico de RAM por etapa: local vs docker",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (stage, period) (last_over_time(nyc_taxi_stage_memory_peak_bytes[30m]))",
-          "legendFormat": "{{stage}} · {{period}}",
+          "expr": "max by (modo, stage, period) (last_over_time(nyc_taxi_stage_memory_peak_bytes[30m]))",
+          "legendFormat": "{{modo}} · {{stage}} · {{period}}",
           "refId": "A",
           "instant": true,
           "range": false
