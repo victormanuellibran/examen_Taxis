@@ -56,7 +56,7 @@ Uso: .\run.ps1 <accion> [-Mes AAAA-MM] [-Modelo python|dbt]
   dagster     abre la interfaz de Dagster          -> http://localhost:3000
   monitoreo   levanta Prometheus + Grafana + Dozzle -> http://localhost:3001 y :8888
   apagar      apaga Prometheus, Grafana y Dozzle
-  docker      corre el pipeline dentro de Docker (con límite de 4 GB)
+  docker      corre el pipeline dentro de Docker (límite 4 GB); acepta -Mes y -Modelo
   dbt-docs    genera y abre la documentación dbt   -> http://localhost:8081
   todo        test + pipeline + insights
 "@
@@ -87,7 +87,13 @@ Uso: .\run.ps1 <accion> [-Mes AAAA-MM] [-Modelo python|dbt]
         Start-Process "http://localhost:3001"
     }
     "apagar" { docker compose --profile monitoreo stop prometheus grafana dozzle }
-    "docker" { docker compose up --build pipeline }
+    "docker" {
+        # Mismo pipeline dentro del contenedor (tope 4 GB), con el -Mes y -Modelo pedidos.
+        # --use-aliases: Prometheus lo encuentra como "pipeline"; --name: Dozzle lo muestra como nyc_taxi_pipeline.
+        docker compose build pipeline
+        cmd /c "docker rm -f nyc_taxi_pipeline >nul 2>&1"
+        docker compose run --rm --use-aliases --name nyc_taxi_pipeline pipeline python -m src.pipeline --mes $Mes --modelo $Modelo
+    }
     "dbt-docs" { Assert-Venv; & $Py -m src.dbt_runner docs --mes $Mes --serve }
     "todo" {
         Assert-Venv; Enable-Metricas

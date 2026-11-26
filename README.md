@@ -897,7 +897,7 @@ flowchart LR
 | `.\run.ps1 dashboard` | Dashboard de resultados en http://localhost:8501 |
 | `.\run.ps1 dagster` | Interfaz de Dagster en http://localhost:3000 (con métricas si Grafana está levantado) |
 | `.\run.ps1 monitoreo` / `apagar` | Levanta o apaga Prometheus (:9090), Grafana (:3001) y Dozzle (:8888) |
-| `.\run.ps1 docker` | Pipeline dentro de Docker (límite 4 GB) |
+| `.\run.ps1 docker [-Mes 2025-06] [-Modelo python\|dbt]` | Pipeline dentro de Docker (límite 4 GB). En Grafana aparece como `docker` y se compara con la corrida local |
 | `.\run.ps1 dbt-docs` | Documentación dbt con grafo de linaje en http://localhost:8081 |
 
 ### 20.2. Monitoreo en tiempo real (Prometheus + Grafana)
