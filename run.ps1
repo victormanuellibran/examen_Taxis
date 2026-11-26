@@ -90,9 +90,10 @@ Uso: .\run.ps1 <accion> [-Mes AAAA-MM] [-Modelo python|dbt]
     "docker" {
         # Mismo pipeline dentro del contenedor (tope 4 GB), con el -Mes y -Modelo pedidos.
         # --use-aliases: Prometheus lo encuentra como "pipeline"; --name: Dozzle lo muestra como nyc_taxi_pipeline.
+        # Sin --rm: el contenedor queda "Exited" para ver sus logs en Dozzle; se borra al empezar la próxima corrida.
         docker compose build pipeline
         cmd /c "docker rm -f nyc_taxi_pipeline >nul 2>&1"
-        docker compose run --rm --use-aliases --name nyc_taxi_pipeline pipeline python -m src.pipeline --mes $Mes --modelo $Modelo
+        docker compose run --use-aliases --name nyc_taxi_pipeline pipeline python -m src.pipeline --mes $Mes --modelo $Modelo
     }
     "dbt-docs" { Assert-Venv; & $Py -m src.dbt_runner docs --mes $Mes --serve }
     "todo" {
