@@ -886,6 +886,8 @@ flowchart LR
 
 ### 20.1. Atajos en Windows (`run.ps1`)
 
+> **Si PowerShell dice que *la ejecución de scripts está deshabilitada***, usar `.\run.cmd` en lugar de `.\run.ps1` con los mismos argumentos (por ejemplo `.\run.cmd pipeline`). Windows PowerShell 5.1 bloquea los scripts por defecto; `run.cmd` habilita la ejecución **sólo para ese proceso**, sin cambiar la configuración del sistema.
+
 | Comando | Qué hace |
 | --- | --- |
 | `.\run.ps1 instalar` | Crea `.venv` e instala `requirements-dashboard.txt` (pipeline + Streamlit) |

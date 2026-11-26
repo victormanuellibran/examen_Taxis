@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Atajos para usar el proyecto en Windows sin recordar comandos largos.
 
